@@ -12,6 +12,10 @@ Lava Stew is a geospatial analyst agent demonstrating production deployment patt
 
 **References to magma_soup**: In this plan, you will see references to Magma Soup. Magma Soup was the application built for a previous series of blog posts about using an MCP server. If you need to reference it, magma soup is in a sibling directory to this project: cd ../magma_soup
 
+## Important information about SDK documentation
+
+The most recent documentation for the SDK is under the context/agent_sdk_documentation directory. Consult it as needed.
+
 ## Why This Architecture?
 
 ### The Agent SDK is Fundamentally Stateful
