@@ -1,17 +1,15 @@
 # Lava Stew
 
-Geospatial analyst agent demonstrating production deployment patterns for the Anthropic Agent SDK.
+Geospatial analyst agent built with the Anthropic Agent SDK.
 
 ## Overview
 
-Lava Stew shows how to deploy the Claude Agent SDK in a stateful, production-ready architecture. This Phase 1 implementation demonstrates:
+Lava Stew shows how to deploy the Claude Agent SDK in a stateful, production-ready architecture.
 
 - **Stateful Worker Pattern**: Long-running containerized processes maintain Agent SDK session state in memory
 - **Python Tools via TypeScript**: TypeScript infrastructure invoking Python geospatial scripts
 - **SSE Streaming**: Real-time response streaming from agent to client
 - **Custom MCP Tools**: Geocoding and distance calculation tools wrapped for the Agent SDK
-
-**Use Case**: Answer "What is the distance between Seattle and Portland?" with geocoding and distance calculation.
 
 ## Architecture
 
@@ -86,6 +84,7 @@ docker compose down
 ```
 
 You should see:
+
 ```
 [API] Connected to RabbitMQ at amqp://lava:stew@rabbitmq:5672
 [API] Server listening on port 3001
@@ -107,6 +106,7 @@ curl -X POST http://localhost:3001/chat \
 ```
 
 **Expected output**: SSE stream showing the agent:
+
 1. Geocoding Seattle → `{"lat": 47.6061389, "lng": -122.3328481, ...}`
 2. Geocoding Portland → `{"lat": 45.515232, "lng": -122.6783853, ...}`
 3. Calculating distance → `{"distance_km": 233.93, "distance_miles": 145.36}`
@@ -161,6 +161,7 @@ lava_stew/
 ### Manual Test Cases
 
 1. **Basic distance query**:
+
 ```bash
 curl -X POST http://localhost:3001/chat \
   -H "Content-Type: application/json" \
@@ -168,6 +169,7 @@ curl -X POST http://localhost:3001/chat \
 ```
 
 2. **Single geocoding**:
+
 ```bash
 curl -X POST http://localhost:3001/chat \
   -H "Content-Type: application/json" \
@@ -175,6 +177,7 @@ curl -X POST http://localhost:3001/chat \
 ```
 
 3. **Conversation continuity** (same conversationId):
+
 ```bash
 curl -X POST http://localhost:3001/chat \
   -H "Content-Type: application/json" \
@@ -188,11 +191,13 @@ curl -X POST http://localhost:3001/chat \
 ## Tools
 
 ### geocode
+
 - **Input**: `{ location: string }`
 - **Output**: `{ lat: number, lng: number, formatted_address: string }`
 - **Example**: `"Seattle, WA"` → `{"lat": 47.6061, "lng": -122.3328, ...}`
 
 ### calculate_distance
+
 - **Input**: `{ point1: {lat, lng}, point2: {lat, lng} }`
 - **Output**: `{ distance_km: number, distance_miles: number }`
 - **Example**: Seattle to Portland → `{"distance_km": 233.93, "distance_miles": 145.36}`
@@ -205,11 +210,8 @@ This is a minimal viable implementation demonstrating the architecture. Known li
 - **Single worker**: No load balancing or high availability
 - **No database**: Tool results logged to stdout only, not persisted
 - **No authentication**: Open endpoint
-- **No automated tests**: Manual testing only (test suite in later phase)
 - **Memory unbounded**: Session map grows without eviction
 - **No rate limiting**: Can overwhelm Google Maps API
-
-These will be addressed in Phase 2 (Flutter client) and Phase 3 (persistence, multiple workers).
 
 ## Development
 
@@ -232,14 +234,6 @@ uv run python calculate_distance.py "47.6061,-122.3328" "45.5152,-122.6784"
 # Check API server
 curl http://localhost:3001/health
 ```
-
-## Blog Post Series
-
-This project accompanies a blog post series for GIS professionals about deploying the Anthropic Agent SDK:
-
-1. **Phase 1** (this implementation): Stateful worker foundation with Python tools and RabbitMQ messaging
-2. **Phase 2**: Flutter client with map visualization
-3. **Phase 3**: Persistence (PostGIS) and multiple workers
 
 ## License
 

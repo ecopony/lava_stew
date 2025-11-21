@@ -4,13 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Lava Stew is a geospatial analyst agent demonstrating production deployment patterns for the Anthropic Agent SDK. This is a blog post project (or series) showing how to manage the infrastructure complexity required by the Agent SDK's stateful session model.
+Lava Stew is a geospatial analyst agent demonstrating building an agent with the Claude Agent SDK.
 
-**Initial use case**: Answer "What is the distance between Seattle and Portland?" with geocoding and distance calculation, displaying cities on a map.
-
-**Blog post focus**: Show GIS professionals how to build a geospatial agent using the Anthropic Agent SDK. The audience is familiar with geospatial concepts but may not understand AI integration. This demonstrates an alternative to the MCP server approach shown in previous posts, highlighting both the power and architectural complexity of the Agent SDK pattern. While powerful, this isn't the simplest solution - we'll show the tradeoffs.
-
-**References to magma_soup**: In this plan, you will see references to Magma Soup. Magma Soup was the application built for a previous series of blog posts about using an MCP server. If you need to reference it, magma soup is in a sibling directory to this project: cd ../magma_soup
+**References to magma_soup**: If you see references to Magma Soup: Magma Soup was the application built to demonstrate MCP servers. If you need to reference it, magma soup is in a sibling directory to this project: cd ../magma_soup
 
 ## Important information about SDK documentation
 
@@ -52,8 +48,8 @@ The complexity in this architecture isn't over-engineering - it's the minimum vi
 ### Design Principles
 
 1. **Stateful workers** - Long-running containerized processes maintain Agent SDK session state (following SDK's recommended Pattern 2)
-2. **Python tools via TypeScript worker** - Demonstrate TypeScript worker invoking Python geospatial scripts (GIS professionals prefer Python)
-3. **SSE streaming** - Server-Sent Events for real-time response streaming (proven pattern from magma_soup)
+2. **Python tools via TypeScript worker** - Demonstrate TypeScript worker invoking Python geospatial scripts (GIS professionals often prefer Python)
+3. **SSE streaming** - Server-Sent Events for real-time response streaming
 4. **TypeScript** - Type safety for API server and worker coordination
 
 ### System Components
@@ -117,14 +113,14 @@ flutter run
 
 ## Custom Tools
 
-Tools are defined in the Anthropic SDK format (not MCP). All tools are Python scripts invoked by the TypeScript worker via child_process, demonstrating how TypeScript infrastructure can leverage Python's rich geospatial ecosystem.
+Tools are defined in the Anthropic SDK format. All tools are invoked by the TypeScript worker via child_process, demonstrating how TypeScript infrastructure can leverage multiple language's ecosystems.
 
-**Tools:**
+**Current Tools:**
 
 1. **geocode** - Convert city name to coordinates via Python + Google Maps API
 2. **calculate_distance** - Calculate geodesic distance between two points via Python + geopy
 
-**Tool Implementation Pattern:**
+**An Example Tool Implementation Pattern:**
 
 TypeScript worker defines tool schema and invokes Python via uv:
 
@@ -152,17 +148,15 @@ This pattern shows GIS professionals they can keep using Python libraries they k
 
 ## Flutter Client
 
-Based on magma_soup architecture:
-
 - **State Management**: BLoC pattern (flutter_bloc)
 - **Theme**: Solarized Light
 - **Layout**: Two-pane (chat + map/results)
 - **Map**: Flutter Map with feature visualization
-- **Connection**: SSE (same as magma_soup)
+- **Connection**: SSE
 
 ### Models
 
-- Message, GeoFeature, Conversation (same as magma_soup)
+- Message, GeoFeature, Conversation
 - SSE events for streaming updates
 
 ## Environment Variables
@@ -177,8 +171,6 @@ RABBITMQ_URL=amqp://lava:stew@localhost:5672
 ```
 
 ## Instructions for Claude Code
-
-Ed's rules from magma_soup apply here. Key points:
 
 ### Foundational Rules
 
