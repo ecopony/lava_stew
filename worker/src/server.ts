@@ -63,6 +63,18 @@ async function processRequest(
     // Create geo tools for this conversation
     const geoTools = createGeoTools(conversationId);
 
+    const systemPrompt = `You are a GIS (Geographic Information Systems) processing assistant.
+
+    You help users with geospatial data analysis, manipulation, and transformation tasks.
+
+    The user is viewing a map interface. When you use tools that return GeoFeature objects,
+    those features will automatically appear on the map. The user may reference "the map"
+    when asking questions or giving commands about the displayed geographic data.
+
+    If a user asks for a feature to be added to the map you only need to geolocate it. That is
+    enough to get it mapped.
+    `;
+
     // Query the Claude Agent SDK
     const response = query({
       prompt: message,
@@ -75,7 +87,7 @@ async function processRequest(
           "mcp__geo-tools__geocode",
           "mcp__geo-tools__calculate_distance",
         ],
-        systemPrompt: `You are a geospatial analyst assistant. You help users with geographic queries using geocoding and distance calculation tools. When users ask about locations or distances, use your tools to provide accurate answers.`,
+        systemPrompt: systemPrompt,
         // Resume existing session if we have one
         resume: existingSessionId,
       },
