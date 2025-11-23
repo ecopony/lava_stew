@@ -164,6 +164,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
             emit(state.copyWith(messages: List.from(currentMessages)));
 
+          case FeatureRemovedEvent():
+            // Remove geo feature from map
+            _mapBloc.add(RemoveGeoFeature(clientEvent.featureId));
+
           case ErrorEvent():
             throw Exception('${clientEvent.errorType}: ${clientEvent.message}');
 

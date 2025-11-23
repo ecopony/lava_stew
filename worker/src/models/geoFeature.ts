@@ -54,3 +54,38 @@ export async function getConversationGeoFeatures(
   );
   return result.rows;
 }
+
+export async function findAndDeleteFeatureByLabel(
+  conversationId: string,
+  labelQuery: string
+): Promise<StoredGeoFeature | null> {
+  const pool = getPool();
+  
+  // Find features matching the label within this conversation
+  const findResult = await pool.query(
+    `SELECT gf.id, gf.message_id, gf.feature_type,
+            ST_AsGeoJSON(gf.geometry)::json as geometry,
+            gf.properties, gf.created_at
+     FROM geo_features gf
+     JOIN messages m ON gf.message_id = m.id
+     WHERE m.conversation_id = $1
+       AND gf.properties->>'label' ILIKE $2
+     ORDER BY gf.created_at DESC
+     LIMIT 1`,
+    [conversationId, `%${labelQuery}%`]
+  );
+
+  if (findResult.rows.length === 0) {
+    return null;
+  }
+
+  const feature = findResult.rows[0];
+
+  // Delete the feature
+  await pool.query(
+    `DELETE FROM geo_features WHERE id = $1`,
+    [feature.id]
+  );
+
+  return feature;
+}

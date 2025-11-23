@@ -21,3 +21,11 @@ export const calculateDistanceSchema = {
     lng: z.number().describe("Longitude of second point"),
   }),
 };
+
+export const removeFeatureSchema = {
+  location: z
+    .string()
+    .describe(
+      "Name or label of the feature to remove from the map (e.g., 'Seattle', 'Portland')"
+    ),
+};
