@@ -1,4 +1,23 @@
 services:
+  postgis:
+    image: postgis/postgis:15-3.4
+    container_name: lava-stew-postgis
+    environment:
+      POSTGRES_DB: lava_stew
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      # Map container port 5432 to host port 5433 to avoid conflicts
+      - "5433:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   rabbitmq:
     image: rabbitmq:3-management
     ports:
@@ -23,9 +42,17 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
       - RABBITMQ_URL=amqp://lava:stew@rabbitmq:5672
+      # Database connection from within Docker network uses internal port 5432
+      - DB_HOST=postgis
+      - DB_PORT=5432
+      - DB_NAME=lava_stew
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
     env_file:
       - .env
     depends_on:
+      postgis:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -43,4 +70,5 @@ services:
         condition: service_healthy
 
 volumes:
+  postgis_data:
   rabbitmq-data:

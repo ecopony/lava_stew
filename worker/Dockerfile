@@ -19,6 +19,7 @@ RUN npm ci
 # Copy TypeScript config and worker source
 COPY tsconfig.json ./
 COPY src ./src
+COPY migrations ./migrations
 
 # Copy Python scripts and dependencies
 COPY scripts ./scripts

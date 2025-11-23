@@ -4,8 +4,11 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import amqp, { Channel, ChannelModel, ConsumeMessage } from "amqplib";
 import dotenv from "dotenv";
-import { transformToAgentEvents } from "./eventTransformer";
-import { createGeoTools } from "./mcpServer";
+import { transformToAgentEvents, ToolResultForPersistence } from "./eventTransformer.js";
+import { createGeoTools } from "./mcpServer.js";
+import { ensureConversation, createMessage } from "./models/conversation.js";
+import { createGeoFeature } from "./models/geoFeature.js";
+import { GeoFeatureExtractor } from "./featureExtractor.js";
 
 dotenv.config();
 
@@ -38,6 +41,9 @@ const REQUESTS_QUEUE = "chat.requests";
 // Stateful session storage - maps conversationId to SDK session_id
 const sessionIds = new Map<string, string>();
 
+// Feature extractor for geo tools
+const featureExtractor = new GeoFeatureExtractor();
+
 async function processRequest(
   channel: Channel,
   replyTo: string,
@@ -48,7 +54,44 @@ async function processRequest(
     `[WORKER] Processing request for conversation: ${conversationId}`
   );
 
+  // Collect tool results for async persistence
+  const toolResults: ToolResultForPersistence[] = [];
+
+  // Collect complete assistant response for database persistence
+  // For typical geospatial agent responses (under ~100KB) this is fine;
+  // if responses regularly exceed ~1MB, consider streaming writes to database instead
+  let assistantResponse = '';
+
+  // We'll create the assistant message after collecting the response
+  let assistantMessage: any = null;
+  let userMessage: any = null;
+  let conversation: any = null;
+
   try {
+    // Ensure conversation exists in database and get its UUID
+    try {
+      conversation = await ensureConversation(conversationId);
+      // Create user message record (sequence number computed atomically in database)
+      // Use the UUID from the database, not the session key
+      userMessage = await createMessage(conversation.id, 'user', message);
+    } catch (dbError: any) {
+      console.error(
+        `[WORKER] Database error for conversation ${conversationId}:`,
+        dbError
+      );
+      // Send error event to client but continue processing
+      // The agent can still respond even if persistence fails
+      channel.sendToQueue(
+        replyTo,
+        Buffer.from(
+          JSON.stringify({
+            type: "error",
+            error: "Database unavailable - conversation will not be persisted",
+          })
+        )
+      );
+    }
+
     // Check if we have an existing session for this conversation
     const existingSessionId = sessionIds.get(conversationId);
 
@@ -107,10 +150,37 @@ async function processRequest(
     })();
 
     // Transform SDK events to domain events and publish to reply queue
+    // We collect the assistant response during streaming but only persist after completion
     for await (const agentEvent of transformToAgentEvents(
-      responseWithSessionTracking
+      responseWithSessionTracking,
+      (toolResult) => {
+        // Collect tool results for async persistence after streaming
+        toolResults.push(toolResult);
+      }
     )) {
+      // Collect assistant response text chunks as they stream
+      if (agentEvent.type === 'assistant_message_chunk' && agentEvent.chunk) {
+        assistantResponse += agentEvent.chunk;
+      }
       channel.sendToQueue(replyTo, Buffer.from(JSON.stringify(agentEvent)));
+    }
+
+    // Streaming completed successfully - now persist the complete assistant message
+    // Only attempt if user message was successfully created
+    if (userMessage && conversation) {
+      try {
+        assistantMessage = await createMessage(
+          conversation.id,
+          'assistant',
+          assistantResponse
+        );
+      } catch (dbError: any) {
+        console.error(
+          `[WORKER] Failed to save assistant message for conversation ${conversationId}:`,
+          dbError
+        );
+        // Already warned client about database issues, continue
+      }
     }
 
     // Send completion marker
@@ -119,11 +189,38 @@ async function processRequest(
     console.log(
       `[WORKER] Completed request for conversation: ${conversationId}`
     );
+
+    // Async: Save geo features to database (don't await)
+    // Only attempt if assistant message was created
+    if (assistantMessage) {
+      saveFeaturesAsync(assistantMessage.id, toolResults).catch((err) => {
+        console.error(`[WORKER] Error saving features for conversation ${conversationId}:`, err);
+      });
+    }
   } catch (error: any) {
     console.error(
       `[WORKER] Error processing conversation ${conversationId}:`,
       error
     );
+
+    // If we collected any assistant response before the error, try to save it
+    if (userMessage && conversation && assistantResponse && !assistantMessage) {
+      try {
+        assistantMessage = await createMessage(
+          conversation.id,
+          'assistant',
+          assistantResponse + '\n\n[Error: Response was interrupted]'
+        );
+        console.log(
+          `[WORKER] Saved partial assistant response for conversation ${conversationId}`
+        );
+      } catch (dbError: any) {
+        console.error(
+          `[WORKER] Failed to save partial assistant message:`,
+          dbError
+        );
+      }
+    }
 
     const errorEvent = {
       type: "error",
@@ -132,6 +229,33 @@ async function processRequest(
 
     channel.sendToQueue(replyTo, Buffer.from(JSON.stringify(errorEvent)));
     channel.sendToQueue(replyTo, Buffer.from(JSON.stringify({ type: "done" })));
+  }
+}
+
+async function saveFeaturesAsync(
+  messageId: string,
+  toolResults: ToolResultForPersistence[]
+): Promise<void> {
+  for (const toolResult of toolResults) {
+    try {
+      const features = featureExtractor.extractFeatures(
+        toolResult.toolName,
+        toolResult.result,
+        toolResult.input
+      );
+
+      for (const feature of features) {
+        await createGeoFeature(messageId, feature);
+        console.log(
+          `[WORKER] Saved geo feature for message ${messageId}: ${feature.label}`
+        );
+      }
+    } catch (error) {
+      console.error(
+        `[WORKER] Error saving feature from tool ${toolResult.toolName}:`,
+        error
+      );
+    }
   }
 }
 

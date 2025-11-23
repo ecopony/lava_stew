@@ -19,12 +19,19 @@ interface ToolResultItem {
   is_error?: boolean;
 }
 
+export interface ToolResultForPersistence {
+  toolName: string;
+  result: string;
+  input: any;
+}
+
 /**
  * Transforms Agent SDK streaming events into domain events for the client.
  * This isolates the client from SDK implementation details.
  */
 export async function* transformToAgentEvents(
-  sdkStream: AsyncIterable<any>
+  sdkStream: AsyncIterable<any>,
+  onToolResult?: (toolResult: ToolResultForPersistence) => void
 ): AsyncIterable<AgentEvent> {
   // Track tool calls to match results
   const pendingTools = new Map<string, ToolUseBlock>();
@@ -131,6 +138,15 @@ export async function* transformToAgentEvents(
               result: parsedResult,
               error: error,
             };
+
+            // Notify about tool result for async persistence
+            if (onToolResult && !item.is_error && resultText) {
+              onToolResult({
+                toolName: toolCall.name,
+                result: resultText,
+                input: toolCall.input,
+              });
+            }
 
             // Emit geo_feature if this is a geocode result
             if (

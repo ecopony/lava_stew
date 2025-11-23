@@ -2,8 +2,8 @@
 // ABOUTME: Translates between SDK tool interface and Python script execution.
 
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
-import { geocodeSchema, calculateDistanceSchema } from "./tools";
-import { executeGeocode, executeCalculateDistance } from "./executor";
+import { geocodeSchema, calculateDistanceSchema } from "./tools.js";
+import { executeGeocode, executeCalculateDistance } from "./executor.js";
 
 export function createGeoTools(conversationId: string) {
   return createSdkMcpServer({
