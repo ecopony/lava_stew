@@ -1,6 +1,8 @@
 // ABOUTME: Transforms Agent SDK events into clean domain events for the client.
 // ABOUTME: Abstracts SDK implementation details, emitting only what the client needs.
 
+import type { GeoFeature } from './types.js';
+
 interface AgentEvent {
   type: string;
   [key: string]: any;
@@ -23,6 +25,7 @@ export interface ToolResultForPersistence {
   toolName: string;
   result: string;
   input: any;
+  features?: GeoFeature[];
 }
 
 /**
@@ -31,6 +34,7 @@ export interface ToolResultForPersistence {
  */
 export async function* transformToAgentEvents(
   sdkStream: AsyncIterable<any>,
+  featureExtractor: any,
   onToolResult?: (toolResult: ToolResultForPersistence) => void
 ): AsyncIterable<AgentEvent> {
   // Track tool calls to match results
@@ -139,28 +143,44 @@ export async function* transformToAgentEvents(
               error: error,
             };
 
+            // Extract features and emit geo_feature events
+            const extractedFeatures = featureExtractor.extractFeatures(
+              toolCall.name,
+              resultText || '',
+              toolCall.input
+            );
+
+            // Emit geo_feature events for each extracted feature
+            for (const feature of extractedFeatures) {
+              yield {
+                type: "geo_feature",
+                id: feature.id,
+                lat: feature.lat,
+                lon: feature.lon,
+                label: feature.label,
+              };
+            }
+
             // Notify about tool result for async persistence
             if (onToolResult && !item.is_error && resultText) {
               onToolResult({
                 toolName: toolCall.name,
                 result: resultText,
                 input: toolCall.input,
+                features: extractedFeatures,
               });
             }
 
-            // Emit geo_feature if this is a geocode result
+            // Emit feature_removed if this is a remove_feature result
             if (
-              toolCall.name.includes("geocode") &&
+              toolCall.name.includes("remove_feature") &&
               parsedResult &&
-              parsedResult.lat !== undefined &&
-              parsedResult.lng !== undefined
+              parsedResult.id
             ) {
               yield {
-                type: "geo_feature",
-                id: item.tool_use_id,
-                lat: parsedResult.lat,
-                lon: parsedResult.lng,
-                label: parsedResult.formatted_address || "Unknown location",
+                type: "feature_removed",
+                featureId: parsedResult.id,
+                label: parsedResult.label || "Unknown",
               };
             }
 

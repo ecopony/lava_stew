@@ -38,6 +38,11 @@ abstract class AgentEvent {
         return GeoFeatureEvent(
           feature: GeoFeature.fromJson(json),
         );
+      case 'feature_removed':
+        return FeatureRemovedEvent(
+          featureId: json['featureId'] as String,
+          label: json['label'] as String? ?? 'Unknown',
+        );
       case 'error':
         return ErrorEvent(
           errorType: json['errorType'] as String? ?? 'unknown',
@@ -109,6 +114,17 @@ class GeoFeatureEvent extends AgentEvent {
   final GeoFeature feature;
 
   const GeoFeatureEvent({required this.feature});
+}
+
+/// Geographic feature removed from map
+class FeatureRemovedEvent extends AgentEvent {
+  final String featureId;
+  final String label;
+
+  const FeatureRemovedEvent({
+    required this.featureId,
+    required this.label,
+  });
 }
 
 /// Error occurred during processing

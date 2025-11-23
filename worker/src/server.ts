@@ -4,11 +4,14 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import amqp, { Channel, ChannelModel, ConsumeMessage } from "amqplib";
 import dotenv from "dotenv";
-import { transformToAgentEvents, ToolResultForPersistence } from "./eventTransformer.js";
-import { createGeoTools } from "./mcpServer.js";
-import { ensureConversation, createMessage } from "./models/conversation.js";
-import { createGeoFeature } from "./models/geoFeature.js";
+import {
+  ToolResultForPersistence,
+  transformToAgentEvents,
+} from "./eventTransformer.js";
 import { GeoFeatureExtractor } from "./featureExtractor.js";
+import { createGeoTools } from "./mcpServer.js";
+import { createMessage, ensureConversation } from "./models/conversation.js";
+import { createGeoFeature } from "./models/geoFeature.js";
 
 dotenv.config();
 
@@ -60,7 +63,7 @@ async function processRequest(
   // Collect complete assistant response for database persistence
   // For typical geospatial agent responses (under ~100KB) this is fine;
   // if responses regularly exceed ~1MB, consider streaming writes to database instead
-  let assistantResponse = '';
+  let assistantResponse = "";
 
   // We'll create the assistant message after collecting the response
   let assistantMessage: any = null;
@@ -73,7 +76,7 @@ async function processRequest(
       conversation = await ensureConversation(conversationId);
       // Create user message record (sequence number computed atomically in database)
       // Use the UUID from the database, not the session key
-      userMessage = await createMessage(conversation.id, 'user', message);
+      userMessage = await createMessage(conversation.id, "user", message);
     } catch (dbError: any) {
       console.error(
         `[WORKER] Database error for conversation ${conversationId}:`,
@@ -129,6 +132,7 @@ async function processRequest(
         allowedTools: [
           "mcp__geo-tools__geocode",
           "mcp__geo-tools__calculate_distance",
+          "mcp__geo-tools__remove_feature",
         ],
         systemPrompt: systemPrompt,
         // Resume existing session if we have one
@@ -153,13 +157,14 @@ async function processRequest(
     // We collect the assistant response during streaming but only persist after completion
     for await (const agentEvent of transformToAgentEvents(
       responseWithSessionTracking,
+      featureExtractor,
       (toolResult) => {
         // Collect tool results for async persistence after streaming
         toolResults.push(toolResult);
       }
     )) {
       // Collect assistant response text chunks as they stream
-      if (agentEvent.type === 'assistant_message_chunk' && agentEvent.chunk) {
+      if (agentEvent.type === "assistant_message_chunk" && agentEvent.chunk) {
         assistantResponse += agentEvent.chunk;
       }
       channel.sendToQueue(replyTo, Buffer.from(JSON.stringify(agentEvent)));
@@ -171,7 +176,7 @@ async function processRequest(
       try {
         assistantMessage = await createMessage(
           conversation.id,
-          'assistant',
+          "assistant",
           assistantResponse
         );
       } catch (dbError: any) {
@@ -194,7 +199,10 @@ async function processRequest(
     // Only attempt if assistant message was created
     if (assistantMessage) {
       saveFeaturesAsync(assistantMessage.id, toolResults).catch((err) => {
-        console.error(`[WORKER] Error saving features for conversation ${conversationId}:`, err);
+        console.error(
+          `[WORKER] Error saving features for conversation ${conversationId}:`,
+          err
+        );
       });
     }
   } catch (error: any) {
@@ -208,8 +216,8 @@ async function processRequest(
       try {
         assistantMessage = await createMessage(
           conversation.id,
-          'assistant',
-          assistantResponse + '\n\n[Error: Response was interrupted]'
+          "assistant",
+          assistantResponse + "\n\n[Error: Response was interrupted]"
         );
         console.log(
           `[WORKER] Saved partial assistant response for conversation ${conversationId}`
@@ -238,11 +246,8 @@ async function saveFeaturesAsync(
 ): Promise<void> {
   for (const toolResult of toolResults) {
     try {
-      const features = featureExtractor.extractFeatures(
-        toolResult.toolName,
-        toolResult.result,
-        toolResult.input
-      );
+      // Use pre-extracted features from streaming (with UUIDs already generated)
+      const features = toolResult.features || [];
 
       for (const feature of features) {
         await createGeoFeature(messageId, feature);

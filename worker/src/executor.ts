@@ -3,6 +3,8 @@
 
 import { execFileSync } from "child_process";
 import path from "path";
+import { findAndDeleteFeatureByLabel } from "./models/geoFeature.js";
+import { ensureConversation } from "./models/conversation.js";
 
 export interface ToolResult {
   success: boolean;
@@ -115,4 +117,71 @@ export async function executeCalculateDistance(
     [point1Str, point2Str],
     args
   );
+}
+
+export async function executeRemoveFeature(
+  conversationId: string,
+  args: { location: string }
+): Promise<ToolResult> {
+  const startTime = Date.now();
+
+  try {
+    // Look up conversation UUID from session_key
+    const conversation = await ensureConversation(conversationId);
+
+    const deletedFeature = await findAndDeleteFeatureByLabel(
+      conversation.id,
+      args.location
+    );
+
+    if (!deletedFeature) {
+      const result: ToolResult = {
+        success: false,
+        error: `No feature matching "${args.location}" found in this conversation`,
+      };
+
+      logToolInvocation({
+        conversationId,
+        toolName: "remove_feature",
+        input: args,
+        output: result,
+        durationMs: Date.now() - startTime,
+      });
+
+      return result;
+    }
+
+    const data = {
+      id: deletedFeature.id,
+      label: deletedFeature.properties?.label || "Unknown",
+      message: `Removed feature "${deletedFeature.properties?.label}" from the map`,
+    };
+
+    const result: ToolResult = { success: true, data };
+
+    logToolInvocation({
+      conversationId,
+      toolName: "remove_feature",
+      input: args,
+      output: result,
+      durationMs: Date.now() - startTime,
+    });
+
+    return result;
+  } catch (error: any) {
+    const result: ToolResult = {
+      success: false,
+      error: error.message || "Failed to remove feature",
+    };
+
+    logToolInvocation({
+      conversationId,
+      toolName: "remove_feature",
+      input: args,
+      output: result,
+      durationMs: Date.now() - startTime,
+    });
+
+    return result;
+  }
 }
