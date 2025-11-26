@@ -4,11 +4,14 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import amqp, { Channel, ChannelModel, ConsumeMessage } from "amqplib";
 import dotenv from "dotenv";
-import { transformToAgentEvents, ToolResultForPersistence } from "./eventTransformer.js";
-import { createGeoTools } from "./mcpServer.js";
-import { ensureConversation, createMessage } from "./models/conversation.js";
-import { createGeoFeature } from "./models/geoFeature.js";
+import {
+  ToolResultForPersistence,
+  transformToAgentEvents,
+} from "./eventTransformer.js";
 import { GeoFeatureExtractor } from "./featureExtractor.js";
+import { createGeoTools } from "./mcpServer.js";
+import { createMessage, ensureConversation } from "./models/conversation.js";
+import { createGeoFeature } from "./models/geoFeature.js";
 
 dotenv.config();
 
@@ -33,16 +36,92 @@ if (missingEnvVars.length > 0) {
 }
 
 const RABBITMQ_URL = process.env.RABBITMQ_URL!;
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-4-5";
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "claude-opus-4-5";
 
 // Queue configuration
 const REQUESTS_QUEUE = "chat.requests";
+
+// Model pricing (per million tokens, in USD)
+// Source: https://docs.anthropic.com/en/docs/about-claude/pricing
+const MODEL_PRICING: Record<
+  string,
+  {
+    input: number;
+    output: number;
+    cacheWrite5m: number;
+    cacheWrite1h: number;
+    cacheRead: number;
+  }
+> = {
+  "claude-opus-4-5": {
+    input: 5.0,
+    output: 25.0,
+    cacheWrite5m: 6.25,
+    cacheWrite1h: 10.0,
+    cacheRead: 0.5,
+  },
+  "claude-sonnet-4-5": {
+    input: 3.0,
+    output: 15.0,
+    cacheWrite5m: 3.75,
+    cacheWrite1h: 6.0,
+    cacheRead: 0.3,
+  },
+};
 
 // Stateful session storage - maps conversationId to SDK session_id
 const sessionIds = new Map<string, string>();
 
 // Feature extractor for geo tools
 const featureExtractor = new GeoFeatureExtractor();
+
+interface UsageMetrics {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_creation?: {
+    ephemeral_5m_input_tokens: number;
+    ephemeral_1h_input_tokens: number;
+  };
+  service_tier?: string;
+}
+
+function logUsageAndCost(conversationId: string, usage: UsageMetrics): void {
+  const inputTokens = usage.input_tokens || 0;
+  const outputTokens = usage.output_tokens || 0;
+  const cacheReadTokens = usage.cache_read_input_tokens || 0;
+  const cache5mTokens = usage.cache_creation?.ephemeral_5m_input_tokens || 0;
+  const cache1hTokens = usage.cache_creation?.ephemeral_1h_input_tokens || 0;
+
+  const pricing = MODEL_PRICING[CLAUDE_MODEL];
+  if (!pricing) {
+    console.warn(
+      `[WORKER] Unknown model pricing for ${CLAUDE_MODEL}, cost calculation skipped`
+    );
+    return;
+  }
+
+  const inputCost = (inputTokens / 1_000_000) * pricing.input;
+  const outputCost = (outputTokens / 1_000_000) * pricing.output;
+  const cacheWrite5mCost = (cache5mTokens / 1_000_000) * pricing.cacheWrite5m;
+  const cacheWrite1hCost = (cache1hTokens / 1_000_000) * pricing.cacheWrite1h;
+  const cacheReadCost = (cacheReadTokens / 1_000_000) * pricing.cacheRead;
+  const totalCost =
+    inputCost +
+    outputCost +
+    cacheWrite5mCost +
+    cacheWrite1hCost +
+    cacheReadCost;
+
+  console.log(
+    `[WORKER] Usage for ${conversationId}: ` +
+      `${inputTokens} input + ${outputTokens} output + ` +
+      `${cacheReadTokens} cache read + ` +
+      `${cache5mTokens} cache write (5m) + ${cache1hTokens} cache write (1h) = ` +
+      `$${totalCost.toFixed(4)}`
+  );
+}
 
 async function processRequest(
   channel: Channel,
@@ -60,12 +139,19 @@ async function processRequest(
   // Collect complete assistant response for database persistence
   // For typical geospatial agent responses (under ~100KB) this is fine;
   // if responses regularly exceed ~1MB, consider streaming writes to database instead
-  let assistantResponse = '';
+  let assistantResponse = "";
 
   // We'll create the assistant message after collecting the response
   let assistantMessage: any = null;
   let userMessage: any = null;
   let conversation: any = null;
+
+  // Track usage for cost monitoring
+  const stepUsages: Array<{
+    messageId: string;
+    timestamp: string;
+    usage: UsageMetrics;
+  }> = [];
 
   try {
     // Ensure conversation exists in database and get its UUID
@@ -73,7 +159,7 @@ async function processRequest(
       conversation = await ensureConversation(conversationId);
       // Create user message record (sequence number computed atomically in database)
       // Use the UUID from the database, not the session key
-      userMessage = await createMessage(conversation.id, 'user', message);
+      userMessage = await createMessage(conversation.id, "user", message);
     } catch (dbError: any) {
       console.error(
         `[WORKER] Database error for conversation ${conversationId}:`,
@@ -145,6 +231,16 @@ async function processRequest(
             `[WORKER] Storing session ID ${sdkMessage.session_id} for conversation ${conversationId}`
           );
         }
+
+        // Capture usage from the result message
+        if (sdkMessage.type === "result" && sdkMessage.usage) {
+          stepUsages.push({
+            messageId: "final_result",
+            timestamp: new Date().toISOString(),
+            usage: sdkMessage.usage,
+          });
+        }
+
         yield sdkMessage;
       }
     })();
@@ -159,7 +255,7 @@ async function processRequest(
       }
     )) {
       // Collect assistant response text chunks as they stream
-      if (agentEvent.type === 'assistant_message_chunk' && agentEvent.chunk) {
+      if (agentEvent.type === "assistant_message_chunk" && agentEvent.chunk) {
         assistantResponse += agentEvent.chunk;
       }
       channel.sendToQueue(replyTo, Buffer.from(JSON.stringify(agentEvent)));
@@ -171,7 +267,7 @@ async function processRequest(
       try {
         assistantMessage = await createMessage(
           conversation.id,
-          'assistant',
+          "assistant",
           assistantResponse
         );
       } catch (dbError: any) {
@@ -186,6 +282,11 @@ async function processRequest(
     // Send completion marker
     channel.sendToQueue(replyTo, Buffer.from(JSON.stringify({ type: "done" })));
 
+    // Log total usage and cost for the request
+    if (stepUsages.length > 0) {
+      logUsageAndCost(conversationId, stepUsages[0].usage);
+    }
+
     console.log(
       `[WORKER] Completed request for conversation: ${conversationId}`
     );
@@ -194,7 +295,10 @@ async function processRequest(
     // Only attempt if assistant message was created
     if (assistantMessage) {
       saveFeaturesAsync(assistantMessage.id, toolResults).catch((err) => {
-        console.error(`[WORKER] Error saving features for conversation ${conversationId}:`, err);
+        console.error(
+          `[WORKER] Error saving features for conversation ${conversationId}:`,
+          err
+        );
       });
     }
   } catch (error: any) {
@@ -208,8 +312,8 @@ async function processRequest(
       try {
         assistantMessage = await createMessage(
           conversation.id,
-          'assistant',
-          assistantResponse + '\n\n[Error: Response was interrupted]'
+          "assistant",
+          assistantResponse + "\n\n[Error: Response was interrupted]"
         );
         console.log(
           `[WORKER] Saved partial assistant response for conversation ${conversationId}`
