@@ -1,0 +1,22 @@
+{
+  "name": "api-worker",
+  "version": "1.0.0",
+  "description": "Rate-limited API worker for external API calls",
+  "type": "module",
+  "main": "dist/worker.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/worker.js",
+    "dev": "tsx src/worker.ts"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.8",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.7",
+    "@types/node": "^22.15.19",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}

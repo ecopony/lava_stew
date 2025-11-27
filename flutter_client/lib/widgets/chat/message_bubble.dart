@@ -126,6 +126,46 @@ class MessageBubble extends StatelessWidget {
           ),
         ],
       );
+    } else if (content is SubagentCallContent) {
+      return Row(
+        children: [
+          Icon(
+            Icons.psychology,
+            size: 16,
+            color: Theme.of(context).colorScheme.tertiary,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Sub-agent: ${content.agentName}',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.tertiary,
+            ),
+          ),
+        ],
+      );
+    } else if (content is SubagentResultContent) {
+      return Row(
+        children: [
+          Icon(
+            content.error != null ? Icons.error : Icons.check_circle,
+            size: 16,
+            color: content.error != null
+                ? Theme.of(context).colorScheme.error
+                : Theme.of(context).colorScheme.tertiary,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '${content.agentName} ${content.error != null ? 'failed' : 'completed'}',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: content.error != null
+                  ? Theme.of(context).colorScheme.error
+                  : Theme.of(context).colorScheme.tertiary,
+            ),
+          ),
+        ],
+      );
     }
 
     return const Text('Unknown message type');

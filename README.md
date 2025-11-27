@@ -6,7 +6,7 @@ Geospatial analyst agent built with the Anthropic Agent SDK.
 
 Lava Stew shows how to deploy the Claude Agent SDK in a stateful, production-ready architecture.
 
-- **Stateful Worker Pattern**: Long-running containerized processes maintain Agent SDK session state in memory
+- **Stateful Agent Worker Pattern**: Long-running containerized processes maintain Agent SDK session state in memory
 - **Python Tools via TypeScript**: TypeScript infrastructure invoking Python geospatial scripts
 - **SSE Streaming**: Real-time response streaming from agent to client
 - **Custom MCP Tools**: Geocoding and distance calculation tools wrapped for the Agent SDK
@@ -20,7 +20,7 @@ API Server (Express on port 3001)
     ↓ Publish to chat.requests queue
 RabbitMQ (port 5672, management UI on 15672)
     ↓ Consume from queue
-Worker Process (Anthropic SDK)
+Agent Worker Process (Anthropic SDK)
     → Python tools (geocoding, distance via uv)
     ↓ Publish events to reply queue
 RabbitMQ
@@ -73,7 +73,7 @@ npm install
 ### Start Services with Docker Compose
 
 ```bash
-# Start all services (RabbitMQ, API server, Worker)
+# Start all services (RabbitMQ, API server, Agent Worker)
 docker compose up -d
 
 # View logs
@@ -112,9 +112,9 @@ curl -X POST http://localhost:3001/chat \
 3. Calculating distance → `{"distance_km": 233.93, "distance_miles": 145.36}`
 4. Responding with natural language answer
 
-### Check Worker Logs
+### Check Agent Worker Logs
 
-The worker logs show tool invocations with timing:
+The agent worker logs show tool invocations with timing:
 
 ```
 [TOOL] test-123 | geocode | {"location":"Seattle, WA"} | {...} | 607ms
@@ -132,7 +132,7 @@ docker compose up rabbitmq -d
 
 # In separate terminals:
 cd api_server && npm run dev
-cd worker && npm run dev
+cd agent_worker && npm run dev
 ```
 
 ## Project Structure
@@ -142,9 +142,9 @@ lava_stew/
 ├── api_server/
 │   └── src/
 │       └── server.ts           # API server with SSE streaming
-├── worker/
+├── agent_worker/
 │   ├── src/
-│   │   ├── server.ts           # Worker process with SDK integration
+│   │   ├── server.ts           # Agent worker process with SDK integration
 │   │   ├── mcpServer.ts        # MCP server wrapper for tools
 │   │   ├── tools.ts            # Tool schema definitions
 │   │   └── executor.ts         # Python tool execution
@@ -202,16 +202,15 @@ curl -X POST http://localhost:3001/chat \
 - **Output**: `{ distance_km: number, distance_miles: number }`
 - **Example**: Seattle to Portland → `{"distance_km": 233.93, "distance_miles": 145.36}`
 
-## Phase 1 Limitations
+## Known Limitations
 
-This is a minimal viable implementation demonstrating the architecture. Known limitations:
+This is a demonstration implementation. Known limitations:
 
-- **No session persistence**: Worker restart loses all conversation history
-- **Single worker**: No load balancing or high availability
+- **No session persistence**: Agent worker restart loses all conversation history
+- **Single agent worker**: No load balancing or high availability
 - **No database**: Tool results logged to stdout only, not persisted
 - **No authentication**: Open endpoint
 - **Memory unbounded**: Session map grows without eviction
-- **No rate limiting**: Can overwhelm Google Maps API
 
 ## Development
 

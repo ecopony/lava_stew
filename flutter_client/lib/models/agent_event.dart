@@ -34,6 +34,17 @@ abstract class AgentEvent {
           result: json['result'] as Map<String, dynamic>?,
           error: json['error'] as String?,
         );
+      case 'subagent_started':
+        return SubagentStartedEvent(
+          toolId: json['toolId'] as String,
+          agentName: json['agentName'] as String,
+        );
+      case 'subagent_completed':
+        return SubagentCompletedEvent(
+          toolId: json['toolId'] as String,
+          agentName: json['agentName'] as String,
+          error: json['error'] as String?,
+        );
       case 'geo_feature':
         return GeoFeatureEvent(
           feature: GeoFeature.fromJson(json),
@@ -103,6 +114,32 @@ class ToolResultEvent extends AgentEvent {
     required this.toolId,
     required this.toolName,
     this.result,
+    this.error,
+  });
+
+  bool get isError => error != null;
+}
+
+/// Sub-agent started
+class SubagentStartedEvent extends AgentEvent {
+  final String toolId;
+  final String agentName;
+
+  const SubagentStartedEvent({
+    required this.toolId,
+    required this.agentName,
+  });
+}
+
+/// Sub-agent completed
+class SubagentCompletedEvent extends AgentEvent {
+  final String toolId;
+  final String agentName;
+  final String? error;
+
+  const SubagentCompletedEvent({
+    required this.toolId,
+    required this.agentName,
     this.error,
   });
 

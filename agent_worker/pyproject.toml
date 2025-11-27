@@ -5,4 +5,8 @@ requires-python = ">=3.11"
 dependencies = [
     "googlemaps>=4.10.0",
     "geopy>=2.4.0",
+    "requests>=2.31.0",
+    "geopandas>=0.14.0",
+    "shapely>=2.0.0",
+    "scipy>=1.11.0",
 ]

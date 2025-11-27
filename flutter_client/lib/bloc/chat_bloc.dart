@@ -149,6 +149,43 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               status: ChatStatus.assistantThinking,
             ));
 
+          case SubagentStartedEvent():
+            // Add sub-agent call message
+            final subagentCallMessage = Message(
+              id: clientEvent.toolId,
+              kind: MessageKind.subagentCall,
+              content: SubagentCallContent(
+                agentName: clientEvent.agentName,
+              ),
+              timestamp: DateTime.now(),
+            );
+            currentMessages.add(subagentCallMessage);
+
+            emit(state.copyWith(
+              messages: List.from(currentMessages),
+              currentSubagent: clientEvent.agentName,
+              status: ChatStatus.subagentExecuting,
+            ));
+
+          case SubagentCompletedEvent():
+            // Add sub-agent result message
+            final subagentResultMessage = Message(
+              id: '${clientEvent.toolId}_result',
+              kind: MessageKind.subagentResult,
+              content: SubagentResultContent(
+                agentName: clientEvent.agentName,
+                error: clientEvent.error,
+              ),
+              timestamp: DateTime.now(),
+            );
+            currentMessages.add(subagentResultMessage);
+
+            emit(state.copyWith(
+              messages: List.from(currentMessages),
+              currentSubagent: null,
+              status: ChatStatus.assistantThinking,
+            ));
+
           case GeoFeatureEvent():
             // Add geo feature to map
             _mapBloc.add(AddGeoFeature(clientEvent.feature));
@@ -184,6 +221,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         messages: currentMessages,
         status: ChatStatus.idle,
         currentToolCall: null,
+        currentSubagent: null,
       ));
     } catch (e) {
       _logger.e('Error during message send: $e');
@@ -200,6 +238,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         status: ChatStatus.error,
         errorMessage: e.toString(),
         currentToolCall: null,
+        currentSubagent: null,
       ));
     }
   }

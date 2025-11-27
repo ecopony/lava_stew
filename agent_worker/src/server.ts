@@ -4,6 +4,7 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import amqp, { Channel, ChannelModel, ConsumeMessage } from "amqplib";
 import dotenv from "dotenv";
+import { agentDefinitions } from "./agent-definitions.js";
 import {
   ToolResultForPersistence,
   transformToAgentEvents,
@@ -12,6 +13,7 @@ import { GeoFeatureExtractor } from "./featureExtractor.js";
 import { createGeoTools } from "./mcpServer.js";
 import { createMessage, ensureConversation } from "./models/conversation.js";
 import { createGeoFeature } from "./models/geoFeature.js";
+import type { UsageMetrics } from "./types.js";
 
 dotenv.config();
 
@@ -19,6 +21,7 @@ dotenv.config();
 const requiredEnvVars = [
   "ANTHROPIC_API_KEY",
   "GOOGLE_MAPS_API_KEY",
+  "OPENROUTESERVICE_API_KEY",
   "RABBITMQ_URL",
 ];
 const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
@@ -34,6 +37,10 @@ if (missingEnvVars.length > 0) {
   );
   process.exit(1);
 }
+
+console.log(
+  `[WORKER] Loaded ${Object.keys(agentDefinitions).length} agent definitions`
+);
 
 const RABBITMQ_URL = process.env.RABBITMQ_URL!;
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "claude-opus-4-5";
@@ -74,18 +81,6 @@ const sessionIds = new Map<string, string>();
 
 // Feature extractor for geo tools
 const featureExtractor = new GeoFeatureExtractor();
-
-interface UsageMetrics {
-  input_tokens: number;
-  output_tokens: number;
-  cache_read_input_tokens: number;
-  cache_creation_input_tokens: number;
-  cache_creation?: {
-    ephemeral_5m_input_tokens: number;
-    ephemeral_1h_input_tokens: number;
-  };
-  service_tier?: string;
-}
 
 function logUsageAndCost(conversationId: string, usage: UsageMetrics): void {
   const inputTokens = usage.input_tokens || 0;
@@ -189,7 +184,7 @@ async function processRequest(
       console.log(`[WORKER] Creating new session for ${conversationId}`);
     }
 
-    // Create geo tools for this conversation
+    // Create geo tools MCP server for this conversation
     const geoTools = createGeoTools(conversationId);
 
     const systemPrompt = `You are a GIS (Geographic Information Systems) processing assistant.
@@ -200,8 +195,20 @@ async function processRequest(
     those features will automatically appear on the map. The user may reference "the map"
     when asking questions or giving commands about the displayed geographic data.
 
-    If a user asks for a feature to be added to the map you only need to geolocate it. That is
-    enough to get it mapped.
+    For location intelligence queries (analyzing characteristics of locations), you have access
+    to a location-intelligence sub-agent that can:
+    - Gather comprehensive geospatial data for a location
+    - Analyze the data using deterministic Python tools
+    - Return insights about walkability, amenities, and accessibility
+
+    When comparing multiple locations, spawn multiple location-intelligence agents in parallel
+    (one per location) and synthesize their results into a comparison.
+
+    IMPORTANT: Sub-agents automatically geocode locations and add features to the map.
+    You do NOT need to re-geocode locations that sub-agents have already processed.
+
+    If a user asks for a simple feature to be added to the map (not analysis), just use the
+    geocode tool directly - that is enough to get it mapped.
     `;
 
     // Query the Claude Agent SDK
@@ -216,7 +223,13 @@ async function processRequest(
           "mcp__geo-tools__geocode",
           "mcp__geo-tools__calculate_distance",
           "mcp__geo-tools__remove_feature",
+          "mcp__geo-tools__fetch_pois_osm",
+          "mcp__geo-tools__fetch_transit_osm",
+          "mcp__geo-tools__fetch_amenities_osm",
+          "mcp__geo-tools__generate_isochrone",
+          "mcp__geo-tools__analyze_location_data",
         ],
+        agents: agentDefinitions,
         systemPrompt: systemPrompt,
         // Resume existing session if we have one
         resume: existingSessionId,
@@ -234,11 +247,13 @@ async function processRequest(
         }
 
         // Capture usage from the result message
+        // SDK doesn't export explicit usage types, so we validate existence and cast to our interface
+        // The logUsageAndCost function handles missing/partial fields gracefully
         if (sdkMessage.type === "result" && sdkMessage.usage) {
           stepUsages.push({
             messageId: "final_result",
             timestamp: new Date().toISOString(),
-            usage: sdkMessage.usage,
+            usage: sdkMessage.usage as UsageMetrics,
           });
         }
 
@@ -251,9 +266,16 @@ async function processRequest(
     for await (const agentEvent of transformToAgentEvents(
       responseWithSessionTracking,
       featureExtractor,
+      Object.keys(agentDefinitions),
       (toolResult) => {
         // Collect tool results for async persistence after streaming
         toolResults.push(toolResult);
+      },
+      conversationId,
+      (agentName, usage) => {
+        // Log sub-agent usage and cost
+        console.log(`[WORKER] Sub-agent usage: ${agentName}`);
+        logUsageAndCost(conversationId, usage as UsageMetrics);
       }
     )) {
       // Collect assistant response text chunks as they stream

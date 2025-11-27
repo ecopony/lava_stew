@@ -8,6 +8,8 @@ enum MessageKind {
   assistant,
   toolCall,
   toolResult,
+  subagentCall,
+  subagentResult,
   geoFeature,
   error,
 }
@@ -37,6 +39,22 @@ class ToolResultContent extends MessageContent {
   const ToolResultContent({
     required this.toolName,
     this.result,
+    this.error,
+  });
+}
+
+class SubagentCallContent extends MessageContent {
+  final String agentName;
+  const SubagentCallContent({
+    required this.agentName,
+  });
+}
+
+class SubagentResultContent extends MessageContent {
+  final String agentName;
+  final String? error;
+  const SubagentResultContent({
+    required this.agentName,
     this.error,
   });
 }
