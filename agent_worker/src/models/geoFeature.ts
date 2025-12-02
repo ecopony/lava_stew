@@ -1,8 +1,8 @@
 // ABOUTME: Database model for geographic features
 // ABOUTME: Stores spatial data using PostGIS geometry types
 
-import { getPool } from '../database.js';
-import type { GeoFeature, StoredGeoFeature } from '../types.js';
+import { getPool } from "../database.js";
+import type { GeoFeature, StoredGeoFeature } from "../types.js";
 
 export async function createGeoFeature(
   messageId: string,
@@ -17,7 +17,14 @@ export async function createGeoFeature(
      RETURNING id, message_id, feature_type,
                ST_AsGeoJSON(geometry)::json as geometry,
                properties, created_at`,
-    [feature.id, messageId, feature.type, feature.lon, feature.lat, JSON.stringify({ label: feature.label })]
+    [
+      feature.id,
+      messageId,
+      feature.type,
+      feature.lon,
+      feature.lat,
+      JSON.stringify({ label: feature.label }),
+    ]
   );
 
   return result.rows[0];
@@ -60,7 +67,7 @@ export async function findAndDeleteFeatureByLabel(
   labelQuery: string
 ): Promise<StoredGeoFeature | null> {
   const pool = getPool();
-  
+
   // Find features matching the label within this conversation
   const findResult = await pool.query(
     `SELECT gf.id, gf.message_id, gf.feature_type,
@@ -82,10 +89,7 @@ export async function findAndDeleteFeatureByLabel(
   const feature = findResult.rows[0];
 
   // Delete the feature
-  await pool.query(
-    `DELETE FROM geo_features WHERE id = $1`,
-    [feature.id]
-  );
+  await pool.query(`DELETE FROM geo_features WHERE id = $1`, [feature.id]);
 
   return feature;
 }

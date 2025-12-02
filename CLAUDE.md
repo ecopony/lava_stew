@@ -30,7 +30,7 @@ The SDK documentation explicitly recommends [containerized deployment patterns](
 3. **Hybrid Sessions** - Ephemeral containers hydrated with saved state
 4. **Single Containers** - Multiple SDK processes for agent collaboration
 
-**This project implements Pattern 2 (Long-Running Sessions)** - maintaining stateful worker processes that hold SDK session state in memory.
+**This project implements Pattern 2 (Long-Running Sessions)** - maintaining stateful agent worker processes that hold SDK session state in memory.
 
 ### Why Not Just Send Message Arrays?
 
@@ -47,15 +47,15 @@ The complexity in this architecture isn't over-engineering - it's the minimum vi
 
 ### Design Principles
 
-1. **Stateful workers** - Long-running containerized processes maintain Agent SDK session state (following SDK's recommended Pattern 2)
-2. **Python tools via TypeScript worker** - Demonstrate TypeScript worker invoking Python geospatial scripts (GIS professionals often prefer Python)
+1. **Stateful agent workers** - Long-running containerized processes maintain Agent SDK session state (following SDK's recommended Pattern 2)
+2. **Python tools via TypeScript agent worker** - Demonstrate TypeScript agent worker invoking Python geospatial scripts (GIS professionals often prefer Python)
 3. **SSE streaming** - Server-Sent Events for real-time response streaming
 4. **TypeScript** - Type safety for API server and worker coordination
 
 ### System Components
 
 - **API Server** (Express/TypeScript) - HTTP endpoint, SSE streaming, RabbitMQ RPC client
-- **Worker** (TypeScript) - Agent SDK integration, session management, tool execution
+- **Agent Worker** (TypeScript) - Agent SDK integration, session management, tool execution
 - **RabbitMQ** - Message broker with RPC pattern using exclusive reply queues
 - **Python Tools** - Geocoding and distance calculation scripts invoked via uv
 
@@ -63,8 +63,8 @@ The complexity in this architecture isn't over-engineering - it's the minimum vi
 
 1. Client sends HTTP POST to API server with conversationId + message
 2. API server creates exclusive reply queue, publishes to `chat.requests`
-3. Worker consumes from `chat.requests`, processes with Agent SDK
-4. Worker publishes streaming events to reply queue
+3. Agent worker consumes from `chat.requests`, processes with Agent SDK
+4. Agent worker publishes streaming events to reply queue
 5. API server consumes from reply queue, streams to client via SSE
 6. Reply queue auto-deletes when API server disconnects
 
@@ -82,7 +82,7 @@ The complexity in this architecture isn't over-engineering - it's the minimum vi
 ### Local Development
 
 ```bash
-# Start services (API server, Worker)
+# Start services (API server, Agent Worker)
 docker compose up -d
 
 # View logs
@@ -105,7 +105,7 @@ flutter run
 ## Tech Stack
 
 - **Server**: Node.js, Express, TypeScript
-- **Worker**: [Anthropic Agent SDK (TypeScript)](https://docs.claude.com/en/docs/agent-sdk/overview)
+- **Agent Worker**: [Anthropic Agent SDK (TypeScript)](https://docs.claude.com/en/docs/agent-sdk/overview)
 - **Client**: Flutter, Flutter Map, BLoC state management
 - **APIs**: Google Maps API (geocoding)
 - **Python tooling**: uv for dependency management
@@ -113,7 +113,7 @@ flutter run
 
 ## Custom Tools
 
-Tools are defined in the Anthropic SDK format. All tools are invoked by the TypeScript worker via child_process, demonstrating how TypeScript infrastructure can leverage multiple language's ecosystems.
+Tools are defined in the Anthropic SDK format. All tools are invoked by the TypeScript agent worker via child_process, demonstrating how TypeScript infrastructure can leverage multiple language's ecosystems.
 
 **Current Tools:**
 
@@ -122,10 +122,10 @@ Tools are defined in the Anthropic SDK format. All tools are invoked by the Type
 
 **An Example Tool Implementation Pattern:**
 
-TypeScript worker defines tool schema and invokes Python via uv:
+Agent worker defines tool schema and invokes Python via uv:
 
 ```typescript
-// Worker defines tool for SDK
+// Agent worker defines tool for SDK
 {
   name: "geocode",
   description: "Convert a location name to coordinates",

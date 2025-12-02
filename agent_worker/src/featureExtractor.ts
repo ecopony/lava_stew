@@ -3,8 +3,9 @@
 
 import { randomUUID } from "crypto";
 import type { GeoFeature } from "./types.js";
+import type { IFeatureExtractor } from "./eventTransformer.js";
 
-export class GeoFeatureExtractor {
+export class GeoFeatureExtractor implements IFeatureExtractor {
   extractFeatures(
     toolName: string,
     result: string,

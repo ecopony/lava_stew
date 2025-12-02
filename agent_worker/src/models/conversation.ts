@@ -1,25 +1,27 @@
 // ABOUTME: Database model for conversations
 // ABOUTME: Handles conversation lifecycle and message tracking
 
-import { getPool } from '../database.js';
+import { getPool } from "../database.js";
 
 export interface Conversation {
-  id: string;  // UUID
-  session_key: string;  // The key used for API requests and session tracking
+  id: string; // UUID
+  session_key: string; // The key used for API requests and session tracking
   created_at: Date;
   updated_at: Date;
 }
 
 export interface Message {
-  id: string;  // UUID
-  conversation_id: string;  // UUID
-  role: 'user' | 'assistant';
+  id: string; // UUID
+  conversation_id: string; // UUID
+  role: "user" | "assistant";
   content: string;
   created_at: Date;
   sequence_number: number;
 }
 
-export async function ensureConversation(sessionKey: string): Promise<Conversation> {
+export async function ensureConversation(
+  sessionKey: string
+): Promise<Conversation> {
   const pool = getPool();
 
   const result = await pool.query(
@@ -35,18 +37,18 @@ export async function ensureConversation(sessionKey: string): Promise<Conversati
 
 export async function createMessage(
   conversationId: string,
-  role: 'user' | 'assistant',
+  role: "user" | "assistant",
   content: string
 ): Promise<Message> {
   const pool = getPool();
   const client = await pool.connect();
 
   try {
-    await client.query('BEGIN');
+    await client.query("BEGIN");
 
     // Lock the conversation row to prevent concurrent sequence number conflicts
     await client.query(
-      'SELECT id FROM conversations WHERE id = $1 FOR UPDATE',
+      "SELECT id FROM conversations WHERE id = $1 FOR UPDATE",
       [conversationId]
     );
 
@@ -62,10 +64,10 @@ export async function createMessage(
       [conversationId, role, content]
     );
 
-    await client.query('COMMIT');
+    await client.query("COMMIT");
     return result.rows[0];
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query("ROLLBACK");
     throw error;
   } finally {
     client.release();

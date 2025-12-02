@@ -5,3 +5,7 @@
 .idea/
 .serena
 context/
+
+# Python
+*.pyc
+__pycache__/

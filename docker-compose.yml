@@ -28,15 +28,16 @@ services:
       RABBITMQ_DEFAULT_PASS: stew
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     healthcheck:
       test: rabbitmq-diagnostics -q ping
       interval: 5s
       timeout: 10s
       retries: 5
 
-  worker:
+  agent_worker:
     build:
-      context: ./worker
+      context: ./agent_worker
       dockerfile: Dockerfile
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -55,6 +56,66 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+
+  overpass_worker:
+    build:
+      context: ./api_workers
+      dockerfile: Dockerfile
+    environment:
+      - RABBITMQ_URL=amqp://lava:stew@rabbitmq:5672
+      - SCRIPTS_PATH=/app/agent_worker/scripts
+      - QUEUE_NAME=overpass.requests
+      - MIN_DELAY_MS=2000
+      - LOG_PREFIX=OVERPASS_WORKER
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./agent_worker/scripts:/app/agent_worker/scripts:ro
+      - ./agent_worker/pyproject.toml:/app/agent_worker/pyproject.toml:ro
+      - ./agent_worker/uv.lock:/app/agent_worker/uv.lock:ro
+
+  google_maps_worker:
+    build:
+      context: ./api_workers
+      dockerfile: Dockerfile
+    environment:
+      - RABBITMQ_URL=amqp://lava:stew@rabbitmq:5672
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+      - SCRIPTS_PATH=/app/agent_worker/scripts
+      - QUEUE_NAME=google_maps.requests
+      - MIN_DELAY_MS=1000
+      - LOG_PREFIX=GOOGLE_MAPS_WORKER
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./agent_worker/scripts:/app/agent_worker/scripts:ro
+      - ./agent_worker/pyproject.toml:/app/agent_worker/pyproject.toml:ro
+      - ./agent_worker/uv.lock:/app/agent_worker/uv.lock:ro
+
+  openroute_worker:
+    build:
+      context: ./api_workers
+      dockerfile: Dockerfile
+    environment:
+      - RABBITMQ_URL=amqp://lava:stew@rabbitmq:5672
+      - OPENROUTESERVICE_API_KEY=${OPENROUTESERVICE_API_KEY}
+      - SCRIPTS_PATH=/app/agent_worker/scripts
+      - QUEUE_NAME=openroute.requests
+      - MIN_DELAY_MS=1000
+      - LOG_PREFIX=OPENROUTE_WORKER
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./agent_worker/scripts:/app/agent_worker/scripts:ro
+      - ./agent_worker/pyproject.toml:/app/agent_worker/pyproject.toml:ro
+      - ./agent_worker/uv.lock:/app/agent_worker/uv.lock:ro
 
   api_server:
     build:

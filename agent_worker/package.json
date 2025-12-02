@@ -8,7 +8,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "tsx src/server.ts",
-    "migrate": "tsx src/utils/migrate.ts"
+    "migrate": "tsx src/utils/migrate.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "agent",
@@ -32,6 +34,7 @@
     "@types/node": "^20.17.6",
     "@types/pg": "^8.11.10",
     "ts-node": "^10.9.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.0.0"
   }
 }

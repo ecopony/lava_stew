@@ -10,6 +10,7 @@ enum ChatStatus {
   assistantThinking,
   assistantTyping,
   toolExecuting,
+  subagentExecuting,
   error
 }
 
@@ -19,6 +20,7 @@ class ChatState extends Equatable {
   final ChatStatus status;
   final String? errorMessage;
   final String? currentToolCall;
+  final String? currentSubagent;
 
   ChatState({
     String? conversationId,
@@ -26,6 +28,7 @@ class ChatState extends Equatable {
     this.status = ChatStatus.idle,
     this.errorMessage,
     this.currentToolCall,
+    this.currentSubagent,
   })  : conversationId = conversationId ?? _generateConversationId(),
         messages = messages ?? [];
 
@@ -39,6 +42,7 @@ class ChatState extends Equatable {
     ChatStatus? status,
     String? errorMessage,
     String? currentToolCall,
+    String? currentSubagent,
   }) {
     return ChatState(
       conversationId: conversationId ?? this.conversationId,
@@ -46,9 +50,10 @@ class ChatState extends Equatable {
       status: status ?? this.status,
       errorMessage: errorMessage ?? this.errorMessage,
       currentToolCall: currentToolCall,
+      currentSubagent: currentSubagent,
     );
   }
 
   @override
-  List<Object?> get props => [conversationId, messages, status, errorMessage, currentToolCall];
+  List<Object?> get props => [conversationId, messages, status, errorMessage, currentToolCall, currentSubagent];
 }

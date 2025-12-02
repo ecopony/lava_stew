@@ -57,7 +57,10 @@ class _ChatPaneState extends State<ChatPane> {
                   : state.status == ChatStatus.toolExecuting &&
                           state.currentToolCall != null
                       ? 'Using ${state.currentToolCall}...'
-                      : null;
+                      : state.status == ChatStatus.subagentExecuting &&
+                              state.currentSubagent != null
+                          ? 'Sub-agent working: ${state.currentSubagent}...'
+                          : null;
 
               return ListView.builder(
                 controller: _scrollController,
