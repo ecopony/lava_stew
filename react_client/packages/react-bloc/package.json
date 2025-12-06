@@ -1,0 +1,21 @@
+{
+  "name": "@granite-crisp/react-bloc",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "BLoC (Business Logic Component) pattern for React, inspired by Flutter's flutter_bloc",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "src"
+  ],
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "zustand": "^4.0.0 || ^5.0.0"
+  }
+}

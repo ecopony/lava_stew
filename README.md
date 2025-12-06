@@ -14,7 +14,7 @@ Lava Stew shows how to deploy the Claude Agent SDK in a stateful, production-rea
 ## Architecture
 
 ```
-Client (curl/Flutter)
+Client (curl/Flutter/React)
     ↓ HTTP POST
 API Server (Express on port 3001)
     ↓ Publish to chat.requests queue
@@ -112,6 +112,35 @@ curl -X POST http://localhost:3001/chat \
 3. Calculating distance → `{"distance_km": 233.93, "distance_miles": 145.36}`
 4. Responding with natural language answer
 
+## Running a Client
+
+Two client applications are provided. **You only need to run one** — they connect to the same backend.
+
+### Option 1: React Client (Web)
+
+```bash
+cd react_client
+pnpm install
+pnpm dev
+```
+
+Open http://localhost:5173 in your browser. The React client uses the BLoC pattern for state management — see `react_client/README.md` for details.
+
+### Option 2: Flutter Client (Desktop/Mobile)
+
+```bash
+cd flutter_client
+flutter pub get
+flutter run
+```
+
+Select your target platform when prompted. The Flutter client also uses BLoC via `flutter_bloc`.
+
+Both clients provide:
+- Two-pane layout (chat + map)
+- SSE streaming for real-time responses
+- Map visualization of geocoded locations
+
 ### Check Agent Worker Logs
 
 The agent worker logs show tool invocations with timing:
@@ -151,7 +180,8 @@ lava_stew/
 │   └── scripts/
 │       ├── geocode.py          # Google Maps geocoding
 │       └── calculate_distance.py  # Geodesic distance calculation
-├── flutter_client/             # Flutter client (Phase 2)
+├── flutter_client/             # Flutter client (desktop/mobile)
+├── react_client/               # React client (web)
 ├── docker-compose.yml          # Container orchestration with RabbitMQ
 └── .env                        # Environment variables
 ```
