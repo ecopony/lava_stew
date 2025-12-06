@@ -1026,4 +1026,129 @@ describe('transformToAgentEvents', () => {
       );
     });
   });
+
+  describe('Orchestrator Usage Tracking', () => {
+    it('should track orchestrator usage when not inside a sub-agent', async () => {
+      const subagentUsageCallback = vi.fn();
+      const orchestratorUsageCallback = vi.fn();
+
+      const sdkStream = (async function* () {
+        // Orchestrator analyzes message and decides to use tool (no sub-agent)
+        yield {
+          type: 'assistant',
+          message: {
+            id: 'msg-orchestrator-1',
+            usage: {
+              input_tokens: 500,
+              output_tokens: 100,
+              cache_read_input_tokens: 0,
+              cache_creation_input_tokens: 1000,
+            },
+            content: [
+              {
+                type: 'text',
+                text: 'I will analyze this location for you.',
+              },
+            ],
+          },
+        };
+      })();
+
+      const events = [];
+      for await (const event of transformToAgentEvents(
+        sdkStream,
+        mockFeatureExtractor,
+        ['geospatial-data-gatherer'],
+        undefined,
+        'test-conv-123',
+        subagentUsageCallback,
+        orchestratorUsageCallback
+      )) {
+        events.push(event);
+      }
+
+      // Orchestrator usage callback should be called
+      expect(orchestratorUsageCallback).toHaveBeenCalledTimes(1);
+      expect(orchestratorUsageCallback).toHaveBeenCalledWith({
+        input_tokens: 500,
+        output_tokens: 100,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 1000,
+      });
+
+      // Sub-agent callback should NOT be called
+      expect(subagentUsageCallback).not.toHaveBeenCalled();
+    });
+
+    it('should not call orchestrator callback when inside a sub-agent', async () => {
+      const subagentUsageCallback = vi.fn();
+      const orchestratorUsageCallback = vi.fn();
+
+      const sdkStream = (async function* () {
+        // Sub-agent starts
+        yield {
+          type: 'assistant',
+          message: {
+            id: 'msg-1',
+            usage: {
+              input_tokens: 100,
+              output_tokens: 50,
+              cache_read_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+            },
+            content: [
+              {
+                type: 'tool_use',
+                id: 'task-1',
+                name: 'Task',
+                input: {
+                  subagent_type: 'geospatial-data-gatherer',
+                  prompt: 'Gather data',
+                },
+              },
+            ],
+          },
+        };
+
+        // Sub-agent completes
+        yield {
+          type: 'user',
+          message: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'task-1',
+                content: [{ type: 'text', text: 'Data gathered' }],
+              },
+            ],
+          },
+        };
+      })();
+
+      const events = [];
+      for await (const event of transformToAgentEvents(
+        sdkStream,
+        mockFeatureExtractor,
+        ['geospatial-data-gatherer'],
+        undefined,
+        'test-conv-123',
+        subagentUsageCallback,
+        orchestratorUsageCallback
+      )) {
+        events.push(event);
+      }
+
+      // Sub-agent callback should be called
+      expect(subagentUsageCallback).toHaveBeenCalledTimes(1);
+      expect(subagentUsageCallback).toHaveBeenCalledWith('geospatial-data-gatherer', {
+        input_tokens: 100,
+        output_tokens: 50,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      });
+
+      // Orchestrator callback should NOT be called (we're inside sub-agent)
+      expect(orchestratorUsageCallback).not.toHaveBeenCalled();
+    });
+  });
 });

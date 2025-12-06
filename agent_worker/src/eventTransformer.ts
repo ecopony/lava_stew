@@ -109,7 +109,8 @@ export async function* transformToAgentEvents(
   agentNames: string[],
   onToolResult?: (toolResult: ToolResultForPersistence) => void,
   conversationId?: string,
-  onSubagentUsage?: (agentName: string, usage: UsageMetrics) => void
+  onSubagentUsage?: (agentName: string, usage: UsageMetrics) => void,
+  onOrchestratorUsage?: (usage: UsageMetrics) => void
 ): AsyncIterable<AgentEvent> {
   // Track tool calls to match results
   const pendingTools = new Map<string, ToolUseBlock>();
@@ -257,6 +258,11 @@ export async function* transformToAgentEvents(
             if (onSubagentUsage) {
               onSubagentUsage(execution.agentName, message.usage);
             }
+          }
+        } else {
+          // Orchestrator usage (not inside a sub-agent)
+          if (onOrchestratorUsage) {
+            onOrchestratorUsage(message.usage);
           }
         }
       }

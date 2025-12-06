@@ -276,6 +276,11 @@ async function processRequest(
         // Log sub-agent usage and cost
         console.log(`[WORKER] Sub-agent usage: ${agentName}`);
         logUsageAndCost(conversationId, usage as UsageMetrics);
+      },
+      (usage) => {
+        // Log orchestrator usage and cost
+        console.log(`[WORKER] Orchestrator usage`);
+        logUsageAndCost(conversationId, usage as UsageMetrics);
       }
     )) {
       // Collect assistant response text chunks as they stream
