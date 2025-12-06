@@ -2,7 +2,19 @@
 // ABOUTME: Stores spatial data using PostGIS geometry types
 
 import { getPool } from "../database.js";
-import type { GeoFeature, StoredGeoFeature } from "../types.js";
+import type { GeoFeature, GeoJSONGeometryType, StoredGeoFeature } from "../types.js";
+
+// Maps GeoJSON geometry types to database feature_type values
+function mapGeometryToFeatureType(geometry: GeoJSONGeometryType): string {
+  switch (geometry.type) {
+    case "Point":
+      return "marker";
+    case "LineString":
+      return "line";
+    case "Polygon":
+      return "polygon";
+  }
+}
 
 export async function createGeoFeature(
   messageId: string,
@@ -10,20 +22,22 @@ export async function createGeoFeature(
 ): Promise<StoredGeoFeature> {
   const pool = getPool();
 
-  // Convert lat/lon to PostGIS Point geometry
+  // Map GeoJSON geometry type to database feature_type
+  const featureType = mapGeometryToFeatureType(feature.geometry);
+
+  // Use ST_GeomFromGeoJSON to handle any geometry type
   const result = await pool.query(
     `INSERT INTO geo_features (id, message_id, feature_type, geometry, properties)
-     VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326), $6)
+     VALUES ($1, $2, $3, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326), $5)
      RETURNING id, message_id, feature_type,
                ST_AsGeoJSON(geometry)::json as geometry,
                properties, created_at`,
     [
       feature.id,
       messageId,
-      feature.type,
-      feature.lon,
-      feature.lat,
-      JSON.stringify({ label: feature.label }),
+      featureType,
+      JSON.stringify(feature.geometry),
+      JSON.stringify(feature.properties),
     ]
   );
 

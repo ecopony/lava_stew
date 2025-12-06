@@ -378,10 +378,7 @@ export async function* transformToAgentEvents(
                 for (const feature of extractedFeatures) {
                   yield {
                     type: "geo_feature",
-                    id: feature.id,
-                    lat: feature.lat,
-                    lon: feature.lon,
-                    label: feature.label,
+                    ...feature,
                   };
                 }
 

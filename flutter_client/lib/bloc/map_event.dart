@@ -1,7 +1,6 @@
-// ABOUTME: Events for map state management
-// ABOUTME: Handle adding/removing geographic features from the map
+// ABOUTME: Events for map state management.
+// ABOUTME: Handle adding/removing geographic features from the map.
 
-import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/geo_feature.dart';
@@ -18,24 +17,6 @@ class RemoveGeoFeature extends MapEvent {
   final String featureId;
 
   RemoveGeoFeature(this.featureId);
-}
-
-class AddMarkers extends MapEvent {
-  final List<Marker> markers;
-
-  AddMarkers(this.markers);
-}
-
-class AddPolylines extends MapEvent {
-  final List<Polyline> polylines;
-
-  AddPolylines(this.polylines);
-}
-
-class AddPolygons extends MapEvent {
-  final List<Polygon> polygons;
-
-  AddPolygons(this.polygons);
 }
 
 class ClearMap extends MapEvent {}

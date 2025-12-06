@@ -10,26 +10,39 @@ type SdkUsage = {
   cache_read_input_tokens?: number | null;
 };
 
-export interface GeoFeature {
-  id: string;
-  type: 'marker' | 'line' | 'polygon';
-  lat: number;
-  lon: number;
-  label: string;
+export interface GeoJSONPoint {
+  type: 'Point';
+  coordinates: [number, number]; // [lon, lat]
 }
 
-// GeoJSON geometry representation from PostGIS ST_AsGeoJSON
-export interface GeoJSONGeometry {
-  type: string;
-  coordinates: number[] | number[][] | number[][][];
+export interface GeoJSONLineString {
+  type: 'LineString';
+  coordinates: Array<[number, number]>;
 }
+
+export interface GeoJSONPolygon {
+  type: 'Polygon';
+  coordinates: Array<Array<[number, number]>>;
+}
+
+export type GeoJSONGeometryType = GeoJSONPoint | GeoJSONLineString | GeoJSONPolygon;
+
+export interface GeoFeature {
+  id: string;
+  geometry: GeoJSONGeometryType;
+  properties: {
+    label?: string;
+    [key: string]: unknown;
+  };
+}
+
 
 export interface StoredGeoFeature {
   id: string;
   message_id: string;
   feature_type: string;
-  geometry: GeoJSONGeometry;
-  properties: Record<string, any>;
+  geometry: GeoJSONGeometryType;
+  properties: Record<string, unknown>;
   created_at: Date;
 }
 

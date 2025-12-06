@@ -1,6 +1,8 @@
 // ABOUTME: State for the map visualization.
 // ABOUTME: Contains geographic features and view configuration.
 
+import type { GeoFeature } from "../../models";
+
 export interface LatLng {
   lat: number;
   lng: number;
@@ -11,14 +13,8 @@ export interface LatLngBounds {
   northEast: LatLng;
 }
 
-export interface MapMarker {
-  id: string;
-  position: LatLng;
-  label?: string;
-}
-
 export interface MapState {
-  markers: MapMarker[];
+  features: GeoFeature[];
   zoom: number;
   center: LatLng;
   autoFrameEnabled: boolean;
@@ -33,7 +29,7 @@ const DEFAULT_ZOOM = 5.0;
 
 export function createInitialMapState(): MapState {
   return {
-    markers: [],
+    features: [],
     zoom: DEFAULT_ZOOM,
     center: DEFAULT_CENTER,
     autoFrameEnabled: true,
