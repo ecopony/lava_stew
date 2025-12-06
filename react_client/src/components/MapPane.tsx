@@ -2,9 +2,25 @@
 // ABOUTME: Displays geographic features and handles auto-framing.
 
 import { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polygon, useMap } from "react-leaflet";
 import L from "leaflet";
 import { useMapBloc, useMapBlocState } from "../blocs";
+
+// Isochrone styling helpers
+function getIsochroneColor(category?: string): string {
+  if (!category) return "#3388ff";
+  const minutes = parseInt(category.replace("isochrone_", ""), 10);
+  if (minutes <= 5) return "#22c55e";   // green - closest
+  if (minutes <= 10) return "#eab308";  // yellow - medium
+  return "#ef4444";                      // red - furthest
+}
+
+function getIsochroneOpacity(category?: string): number {
+  if (!category) return 0.3;
+  const minutes = parseInt(category.replace("isochrone_", ""), 10);
+  // More transparent for larger areas
+  return Math.max(0.15, 0.4 - (minutes * 0.015));
+}
 
 // Fix default marker icon issue with Vite/bundlers
 const markerIcon = new L.Icon({
@@ -32,6 +48,22 @@ export function MapPane() {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+
+        {/* Polygons (render first so markers appear on top) */}
+        {state.polygons.map((polygon) => (
+          <Polygon
+            key={polygon.id}
+            positions={polygon.coordinates[0].map(([lng, lat]) => [lat, lng] as [number, number])}
+            pathOptions={{
+              color: getIsochroneColor(polygon.category),
+              fillColor: getIsochroneColor(polygon.category),
+              fillOpacity: getIsochroneOpacity(polygon.category),
+              weight: 2,
+            }}
+          >
+            {polygon.label && <Popup>{polygon.label}</Popup>}
+          </Polygon>
+        ))}
 
         {/* Markers */}
         {state.markers.map((marker) => (
@@ -141,7 +173,7 @@ function MapControls() {
       </button>
 
       {/* Show re-enable auto-frame button when disabled */}
-      {!state.autoFrameEnabled && state.markers.length > 0 && (
+      {!state.autoFrameEnabled && (state.markers.length > 0 || state.polygons.length > 0) && (
         <button
           onClick={handleRecenter}
           className="w-8 h-8 bg-blue text-base3 rounded shadow hover:bg-blue/90 flex items-center justify-center"

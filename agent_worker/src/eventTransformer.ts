@@ -373,9 +373,12 @@ export async function* transformToAgentEvents(
                   yield {
                     type: "geo_feature",
                     id: feature.id,
+                    featureType: feature.type,
                     lat: feature.lat,
                     lon: feature.lon,
+                    coordinates: feature.coordinates,
                     label: feature.label,
+                    category: feature.category,
                   };
                 }
 

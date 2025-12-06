@@ -12,10 +12,15 @@ type SdkUsage = {
 
 export interface GeoFeature {
   id: string;
-  type: 'marker' | 'line' | 'polygon';
-  lat: number;
-  lon: number;
-  label: string;
+  type: 'marker' | 'polygon';
+  // For markers (points)
+  lat?: number;
+  lon?: number;
+  // For polygons
+  coordinates?: [number, number][][];
+  // Common
+  label?: string;
+  category?: string;
 }
 
 // GeoJSON geometry representation from PostGIS ST_AsGeoJSON

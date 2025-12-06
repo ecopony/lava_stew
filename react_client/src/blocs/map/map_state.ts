@@ -15,10 +15,19 @@ export interface MapMarker {
   id: string;
   position: LatLng;
   label?: string;
+  category?: string;
+}
+
+export interface MapPolygon {
+  id: string;
+  coordinates: [number, number][][];
+  label?: string;
+  category?: string;
 }
 
 export interface MapState {
   markers: MapMarker[];
+  polygons: MapPolygon[];
   zoom: number;
   center: LatLng;
   autoFrameEnabled: boolean;
@@ -34,6 +43,7 @@ const DEFAULT_ZOOM = 5.0;
 export function createInitialMapState(): MapState {
   return {
     markers: [],
+    polygons: [],
     zoom: DEFAULT_ZOOM,
     center: DEFAULT_CENTER,
     autoFrameEnabled: true,

@@ -16,6 +16,14 @@ export class GeoFeatureExtractor implements IFeatureExtractor {
       return this.extractGeocodeFeature(result, toolArguments);
     } else if (toolName.includes("calculate_distance")) {
       return this.extractDistanceFeatures(result, toolArguments);
+    } else if (toolName.includes("fetch_pois_osm")) {
+      return this.extractPointFeatures(result, "poi");
+    } else if (toolName.includes("fetch_transit_osm")) {
+      return this.extractPointFeatures(result, "transit");
+    } else if (toolName.includes("fetch_amenities_osm")) {
+      return this.extractPointFeatures(result, "amenity");
+    } else if (toolName.includes("generate_isochrone")) {
+      return this.extractIsochroneFeatures(result);
     } else if (toolName.includes("remove_feature")) {
       // no-op for remove_feature tool
       return [];
@@ -110,6 +118,66 @@ export class GeoFeatureExtractor implements IFeatureExtractor {
       return features;
     } catch (e) {
       console.error("Failed to extract distance features:", e);
+      return [];
+    }
+  }
+
+  private extractPointFeatures(
+    result: string,
+    categoryPrefix: string
+  ): GeoFeature[] {
+    try {
+      const geojson = JSON.parse(result);
+      if (geojson.type !== "FeatureCollection" || !Array.isArray(geojson.features)) {
+        return [];
+      }
+
+      return geojson.features
+        .filter((feature: any) => feature.geometry?.type === "Point")
+        .map((feature: any) => {
+          const props = feature.properties || {};
+          // Determine the specific category from properties
+          const subCategory = props.category || props.transit_type || props.amenity_type || "unknown";
+
+          return {
+            id: randomUUID(),
+            type: "marker" as const,
+            lat: feature.geometry.coordinates[1], // GeoJSON is [lon, lat]
+            lon: feature.geometry.coordinates[0],
+            label: props.name || "Unknown",
+            category: `${categoryPrefix}_${subCategory}`,
+          };
+        });
+    } catch (e) {
+      console.error(`Failed to extract ${categoryPrefix} features:`, e);
+      return [];
+    }
+  }
+
+  private extractIsochroneFeatures(result: string): GeoFeature[] {
+    try {
+      const geojson = JSON.parse(result);
+      if (geojson.type !== "FeatureCollection" || !Array.isArray(geojson.features)) {
+        return [];
+      }
+
+      return geojson.features
+        .filter((feature: any) => feature.geometry?.type === "Polygon")
+        .map((feature: any) => {
+          const props = feature.properties || {};
+          const timeMinutes = props.time_minutes || props.value / 60 || 0;
+          const mode = props.mode || "walking";
+
+          return {
+            id: randomUUID(),
+            type: "polygon" as const,
+            coordinates: feature.geometry.coordinates,
+            label: `${timeMinutes} min ${mode}`,
+            category: `isochrone_${timeMinutes}`,
+          };
+        });
+    } catch (e) {
+      console.error("Failed to extract isochrone features:", e);
       return [];
     }
   }

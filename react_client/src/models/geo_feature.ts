@@ -3,18 +3,25 @@
 
 export interface GeoFeature {
   id: string;
-  type: string;
-  lat: number;
-  lon: number;
+  type: "marker" | "polygon";
+  // For markers (points)
+  lat?: number;
+  lon?: number;
+  // For polygons
+  coordinates?: [number, number][][];
+  // Common
   label?: string;
+  category?: string;
 }
 
 export function parseGeoFeature(json: Record<string, unknown>): GeoFeature {
   return {
     id: json.id as string,
-    type: (json.type as string) ?? "marker",
-    lat: (json.lat as number) ?? 0.0,
-    lon: (json.lon as number) ?? 0.0,
+    type: (json.featureType as "marker" | "polygon") ?? "marker",
+    lat: json.lat as number | undefined,
+    lon: json.lon as number | undefined,
+    coordinates: json.coordinates as [number, number][][] | undefined,
     label: json.label as string | undefined,
+    category: json.category as string | undefined,
   };
 }

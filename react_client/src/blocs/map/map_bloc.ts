@@ -6,10 +6,12 @@ import type { MapEvent } from "./map_event";
 import {
   type MapState,
   type MapMarker,
+  type MapPolygon,
   type LatLng,
   type LatLngBounds,
   createInitialMapState,
 } from "./map_state";
+import type { GeoFeature } from "../../models";
 
 // Auto-frame thresholds
 const SINGLE_POINT_THRESHOLD = 0.0001; // ~11 meters at equator
@@ -64,37 +66,75 @@ export class MapBloc extends Bloc<MapEvent, MapState> {
     }
   }
 
-  private handleAddGeoFeature(feature: {
-    id: string;
-    lat: number;
-    lon: number;
-    label?: string;
-  }): void {
+  private handleAddGeoFeature(feature: GeoFeature): void {
+    if (feature.type === "polygon" && feature.coordinates) {
+      this.handleAddPolygon(feature);
+    } else if (feature.lat !== undefined && feature.lon !== undefined) {
+      this.handleAddMarker(feature);
+    }
+  }
+
+  private handleAddMarker(feature: GeoFeature): void {
     const marker: MapMarker = {
       id: feature.id,
-      position: { lat: feature.lat, lng: feature.lon },
+      position: { lat: feature.lat!, lng: feature.lon! },
       label: feature.label,
+      category: feature.category,
     };
 
     const updatedMarkers = [...this.state.markers, marker];
-    const allPoints = updatedMarkers.map((m) => m.position);
+    const allPoints = [
+      ...updatedMarkers.map((m) => m.position),
+      ...this.extractAllPolygonPoints(),
+    ];
     const newPoints = [marker.position];
 
-    this.handleAutoFrame(updatedMarkers, allPoints, newPoints);
+    this.handleAutoFrame(updatedMarkers, this.state.polygons, allPoints, newPoints);
+  }
+
+  private handleAddPolygon(feature: GeoFeature): void {
+    const polygon: MapPolygon = {
+      id: feature.id,
+      coordinates: feature.coordinates!,
+      label: feature.label,
+      category: feature.category,
+    };
+
+    const updatedPolygons = [...this.state.polygons, polygon];
+    const newPoints = this.extractPolygonPoints(feature.coordinates!);
+    const allPoints = [
+      ...this.state.markers.map((m) => m.position),
+      ...this.extractAllPolygonPoints(),
+      ...newPoints,
+    ];
+
+    this.handleAutoFrame(this.state.markers, updatedPolygons, allPoints, newPoints);
+  }
+
+  private extractPolygonPoints(coordinates: [number, number][][]): LatLng[] {
+    // Extract points from outer ring for bounds calculation
+    // GeoJSON coordinates are [lon, lat], we need {lat, lng}
+    return coordinates[0].map(([lng, lat]) => ({ lat, lng }));
+  }
+
+  private extractAllPolygonPoints(): LatLng[] {
+    return this.state.polygons.flatMap((p) => this.extractPolygonPoints(p.coordinates));
   }
 
   private handleRemoveGeoFeature(featureId: string): void {
     const updatedMarkers = this.state.markers.filter((m) => m.id !== featureId);
-    this.emit({ markers: updatedMarkers });
+    const updatedPolygons = this.state.polygons.filter((p) => p.id !== featureId);
+    this.emit({ markers: updatedMarkers, polygons: updatedPolygons });
   }
 
   private handleAutoFrame(
     updatedMarkers: MapMarker[],
+    updatedPolygons: MapPolygon[],
     allPoints: LatLng[],
     newPoints: LatLng[]
   ): void {
     if (!this.state.autoFrameEnabled || newPoints.length === 0) {
-      this.emit({ markers: updatedMarkers });
+      this.emit({ markers: updatedMarkers, polygons: updatedPolygons });
       return;
     }
 
@@ -102,7 +142,7 @@ export class MapBloc extends Bloc<MapEvent, MapState> {
     const newBounds = this.calculateBoundsFromPoints(newPoints);
 
     if (!allBounds || !newBounds) {
-      this.emit({ markers: updatedMarkers });
+      this.emit({ markers: updatedMarkers, polygons: updatedPolygons });
       return;
     }
 
@@ -120,6 +160,7 @@ export class MapBloc extends Bloc<MapEvent, MapState> {
 
       this.emit({
         markers: updatedMarkers,
+        polygons: updatedPolygons,
         conversationBounds: allBounds,
         center,
         fitBoundsVersion: this.state.fitBoundsVersion + 1,
@@ -127,13 +168,17 @@ export class MapBloc extends Bloc<MapEvent, MapState> {
     } else {
       this.emit({
         markers: updatedMarkers,
+        polygons: updatedPolygons,
         conversationBounds: allBounds,
       });
     }
   }
 
   private handleEnableAutoFrame(): void {
-    const allPoints = this.state.markers.map((m) => m.position);
+    const allPoints = [
+      ...this.state.markers.map((m) => m.position),
+      ...this.extractAllPolygonPoints(),
+    ];
     const conversationBounds = this.calculateBoundsFromPoints(allPoints);
 
     if (conversationBounds) {
