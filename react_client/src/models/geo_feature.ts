@@ -1,22 +1,9 @@
-// ABOUTME: Geographic feature model supporting GeoJSON geometry types.
+// ABOUTME: Geographic feature model using standard GeoJSON types.
 // ABOUTME: Extracted from tool results and displayed on the map.
 
-export interface GeoJSONPoint {
-  type: "Point";
-  coordinates: [number, number]; // [lon, lat]
-}
+import type { Point, LineString, Polygon } from "geojson";
 
-export interface GeoJSONLineString {
-  type: "LineString";
-  coordinates: Array<[number, number]>;
-}
-
-export interface GeoJSONPolygon {
-  type: "Polygon";
-  coordinates: Array<Array<[number, number]>>;
-}
-
-export type GeoJSONGeometry = GeoJSONPoint | GeoJSONLineString | GeoJSONPolygon;
+export type GeoJSONGeometry = Point | LineString | Polygon;
 
 export interface GeoFeature {
   id: string;
@@ -33,7 +20,11 @@ export function parseGeoFeature(json: Record<string, unknown>): GeoFeature {
   const properties = (json.properties as Record<string, unknown>) ?? {};
 
   // Handle legacy format with lat/lon at top level
-  if (!geometry && typeof json.lat === "number" && typeof json.lon === "number") {
+  if (
+    !geometry &&
+    typeof json.lat === "number" &&
+    typeof json.lon === "number"
+  ) {
     return {
       id: json.id as string,
       geometry: {

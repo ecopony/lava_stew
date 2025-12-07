@@ -10,17 +10,22 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@deck.gl/core": "^9.2.3",
+    "@deck.gl/layers": "^9.2.3",
+    "@deck.gl/react": "^9.2.3",
     "@granite-crisp/react-bloc": "workspace:*",
-    "leaflet": "^1.9.4",
+    "maplibre-gl": "^5.14.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-leaflet": "^5.0.0",
+    "react-map-gl": "^8.1.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@tailwindcss/vite": "^4.1.17",
-    "@types/leaflet": "^1.9.21",
+    "@types/geojson": "^7946.0.16",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",

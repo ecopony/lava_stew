@@ -2,7 +2,11 @@
 // ABOUTME: Stores spatial data using PostGIS geometry types
 
 import { getPool } from "../database.js";
-import type { GeoFeature, GeoJSONGeometryType, StoredGeoFeature } from "../types.js";
+import type {
+  GeoFeature,
+  GeoJSONGeometryType,
+  StoredGeoFeature,
+} from "../types.js";
 
 // Maps GeoJSON geometry types to database feature_type values
 function mapGeometryToFeatureType(geometry: GeoJSONGeometryType): string {

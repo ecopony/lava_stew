@@ -2,13 +2,16 @@
 // ABOUTME: Converts geocoding, isochrone, and OSM tool outputs into GeoFeature objects
 
 import { randomUUID } from "crypto";
-import type { GeoFeature, GeoJSONGeometryType } from "./types.js";
+import type { Feature, FeatureCollection, Geometry } from "geojson";
 import type { IFeatureExtractor } from "./eventTransformer.js";
+import type { GeoFeature, GeoJSONGeometryType } from "./types.js";
 
 // Supported geometry types that we can render and persist
 const SUPPORTED_GEOMETRY_TYPES = new Set(["Point", "LineString", "Polygon"]);
 
-function isSupportedGeometry(geometry: unknown): geometry is GeoJSONGeometryType {
+function isSupportedGeometry(
+  geometry: unknown
+): geometry is GeoJSONGeometryType {
   return (
     geometry !== null &&
     typeof geometry === "object" &&
@@ -16,23 +19,6 @@ function isSupportedGeometry(geometry: unknown): geometry is GeoJSONGeometryType
     typeof geometry.type === "string" &&
     SUPPORTED_GEOMETRY_TYPES.has(geometry.type)
   );
-}
-
-interface GeoJSONFeature {
-  type: "Feature";
-  geometry: unknown; // Could be any GeoJSON geometry type from external sources
-  properties?: Record<string, unknown>;
-}
-
-interface ValidatedGeoJSONFeature {
-  type: "Feature";
-  geometry: GeoJSONGeometryType; // Validated to be a supported type
-  properties?: Record<string, unknown>;
-}
-
-interface GeoJSONFeatureCollection {
-  type: "FeatureCollection";
-  features: GeoJSONFeature[];
 }
 
 export class GeoFeatureExtractor implements IFeatureExtractor {
@@ -169,25 +155,39 @@ export class GeoFeatureExtractor implements IFeatureExtractor {
       const parsed = JSON.parse(result);
 
       // Handle GeoJSON FeatureCollection
-      if (parsed.type === "FeatureCollection" && Array.isArray(parsed.features)) {
-        const featureCollection = parsed as GeoJSONFeatureCollection;
-        const { supported, skipped } = this.partitionByGeometrySupport(featureCollection.features);
+      if (
+        parsed.type === "FeatureCollection" &&
+        Array.isArray(parsed.features)
+      ) {
+        const featureCollection = parsed as FeatureCollection<Geometry>;
+        const { supported, skipped } = this.partitionByGeometrySupport(
+          featureCollection.features
+        );
 
         if (skipped.length > 0) {
-          console.error(`Skipping ${skipped.length} feature(s) with unsupported geometry: ${skipped.join(", ")}`);
+          console.error(
+            `Skipping ${
+              skipped.length
+            } feature(s) with unsupported geometry: ${skipped.join(", ")}`
+          );
         }
 
-        return supported.map((feature) => this.convertGeoJSONFeature(feature, featureCategory));
+        return supported.map((feature) =>
+          this.convertGeoJSONFeature(feature, featureCategory)
+        );
       }
 
       // Handle single GeoJSON Feature
       if (parsed.type === "Feature" && parsed.geometry) {
         if (!isSupportedGeometry(parsed.geometry)) {
-          const geometryType = (parsed.geometry as { type?: string })?.type ?? "unknown";
-          console.error(`Skipping feature with unsupported geometry: ${geometryType}`);
+          const geometryType =
+            (parsed.geometry as { type?: string })?.type ?? "unknown";
+          console.error(
+            `Skipping feature with unsupported geometry: ${geometryType}`
+          );
           return [];
         }
-        const validatedFeature: ValidatedGeoJSONFeature = {
+        const validatedFeature: Feature<GeoJSONGeometryType> = {
           type: "Feature",
           geometry: parsed.geometry,
           properties: parsed.properties,
@@ -203,18 +203,19 @@ export class GeoFeatureExtractor implements IFeatureExtractor {
     }
   }
 
-  private partitionByGeometrySupport(features: GeoJSONFeature[]): {
-    supported: ValidatedGeoJSONFeature[];
+  private partitionByGeometrySupport(features: Feature<Geometry>[]): {
+    supported: Feature<GeoJSONGeometryType>[];
     skipped: string[];
   } {
-    const supported: ValidatedGeoJSONFeature[] = [];
+    const supported: Feature<GeoJSONGeometryType>[] = [];
     const skipped: string[] = [];
 
     for (const feature of features) {
       if (isSupportedGeometry(feature.geometry)) {
         supported.push({ ...feature, geometry: feature.geometry });
       } else {
-        const geometryType = (feature.geometry as { type?: string })?.type ?? "unknown";
+        const geometryType =
+          (feature.geometry as { type?: string })?.type ?? "unknown";
         skipped.push(geometryType);
       }
     }
@@ -223,7 +224,7 @@ export class GeoFeatureExtractor implements IFeatureExtractor {
   }
 
   private convertGeoJSONFeature(
-    feature: ValidatedGeoJSONFeature,
+    feature: Feature<GeoJSONGeometryType>,
     featureCategory: string
   ): GeoFeature {
     const props = feature.properties || {};
@@ -252,18 +253,27 @@ export class GeoFeatureExtractor implements IFeatureExtractor {
     }
 
     // For isochrones, build a descriptive label
-    if (featureCategory === "isochrone" && typeof props.time_minutes === "number") {
+    if (
+      featureCategory === "isochrone" &&
+      typeof props.time_minutes === "number"
+    ) {
       return `${props.time_minutes} min walk`;
     }
 
     // For transit, include type
-    if (featureCategory === "transit" && typeof props.transit_type === "string") {
+    if (
+      featureCategory === "transit" &&
+      typeof props.transit_type === "string"
+    ) {
       const name = typeof props.name === "string" ? props.name : "";
       return name ? `${name} (${props.transit_type})` : props.transit_type;
     }
 
     // For amenities, include type
-    if (featureCategory === "amenity" && typeof props.amenity_type === "string") {
+    if (
+      featureCategory === "amenity" &&
+      typeof props.amenity_type === "string"
+    ) {
       const name = typeof props.name === "string" ? props.name : "";
       return name ? `${name} (${props.amenity_type})` : props.amenity_type;
     }

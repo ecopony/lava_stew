@@ -1,29 +1,29 @@
-/* ABOUTME: Global styles with Tailwind and Solarized Light theme */
-/* ABOUTME: Imports Tailwind and Leaflet, defines CSS custom properties */
+/* ABOUTME: Global styles with Tailwind and neutral grey theme */
+/* ABOUTME: Imports Tailwind and MapLibre, defines CSS custom properties */
 
 @import "tailwindcss";
-@import "leaflet/dist/leaflet.css";
+@import "maplibre-gl/dist/maplibre-gl.css";
 
 @theme {
-  /* Solarized Light color palette */
-  --color-base03: #002b36;
-  --color-base02: #073642;
-  --color-base01: #586e75;
-  --color-base00: #657b83;
-  --color-base0: #839496;
-  --color-base1: #93a1a1;
-  --color-base2: #eee8d5;
-  --color-base3: #fdf6e3;
+  /* Neutral grey color palette (dark to light) */
+  --color-base03: #121212;
+  --color-base02: #1e1e1e;
+  --color-base01: #424242;
+  --color-base00: #616161;
+  --color-base0: #9e9e9e;
+  --color-base1: #bdbdbd;
+  --color-base2: #f5f5f5;
+  --color-base3: #ffffff;
 
-  /* Solarized accent colors */
-  --color-yellow: #b58900;
-  --color-orange: #cb4b16;
-  --color-red: #dc322f;
-  --color-magenta: #d33682;
-  --color-violet: #6c71c4;
-  --color-blue: #268bd2;
-  --color-cyan: #2aa198;
-  --color-green: #859900;
+  /* Accent colors (neutral-friendly) */
+  --color-yellow: #fbc02d;
+  --color-orange: #f57c00;
+  --color-red: #e53935;
+  --color-magenta: #d81b60;
+  --color-violet: #7e57c2;
+  --color-blue: #1976d2;
+  --color-cyan: #00acc1;
+  --color-green: #43a047;
 }
 
 html, body, #root {

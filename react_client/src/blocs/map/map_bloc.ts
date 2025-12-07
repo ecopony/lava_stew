@@ -34,27 +34,6 @@ export class MapBloc extends Bloc<MapEvent, MapState> {
       case "clearMap":
         this.emitState(createInitialMapState());
         break;
-      case "zoomIn":
-        this.emit({
-          zoom: this.state.zoom + 1,
-          autoFrameEnabled: false,
-        });
-        break;
-      case "zoomOut":
-        this.emit({
-          zoom: this.state.zoom - 1,
-          autoFrameEnabled: false,
-        });
-        break;
-      case "setZoom":
-        this.emit({ zoom: event.zoom });
-        break;
-      case "updateMapPosition":
-        this.emit({
-          center: event.center,
-          zoom: event.zoom,
-        });
-        break;
       case "disableAutoFrame":
         this.emit({ autoFrameEnabled: false });
         break;
@@ -101,16 +80,9 @@ export class MapBloc extends Bloc<MapEvent, MapState> {
       this.shouldAdjustView(newBounds);
 
     if (shouldFit) {
-      const paddedBounds = this.padBounds(allBounds);
-      const center = {
-        lat: (paddedBounds.southWest.lat + paddedBounds.northEast.lat) / 2,
-        lng: (paddedBounds.southWest.lng + paddedBounds.northEast.lng) / 2,
-      };
-
       this.emit({
         features: updatedFeatures,
         conversationBounds: allBounds,
-        center,
         fitBoundsVersion: this.state.fitBoundsVersion + 1,
       });
     } else {
@@ -126,16 +98,9 @@ export class MapBloc extends Bloc<MapEvent, MapState> {
     const conversationBounds = this.calculateBoundsFromPoints(allPoints);
 
     if (conversationBounds) {
-      const paddedBounds = this.padBounds(conversationBounds);
-      const center = {
-        lat: (paddedBounds.southWest.lat + paddedBounds.northEast.lat) / 2,
-        lng: (paddedBounds.southWest.lng + paddedBounds.northEast.lng) / 2,
-      };
-
       this.emit({
         autoFrameEnabled: true,
         conversationBounds,
-        center,
         fitBoundsVersion: this.state.fitBoundsVersion + 1,
       });
     } else {
