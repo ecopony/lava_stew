@@ -1,9 +1,39 @@
 // ABOUTME: Extracts geographic features from tool results
-// ABOUTME: Converts geocoding and distance tool outputs into GeoFeature objects
+// ABOUTME: Converts geocoding, isochrone, and OSM tool outputs into GeoFeature objects
 
 import { randomUUID } from "crypto";
-import type { GeoFeature } from "./types.js";
+import type { GeoFeature, GeoJSONGeometryType } from "./types.js";
 import type { IFeatureExtractor } from "./eventTransformer.js";
+
+// Supported geometry types that we can render and persist
+const SUPPORTED_GEOMETRY_TYPES = new Set(["Point", "LineString", "Polygon"]);
+
+function isSupportedGeometry(geometry: unknown): geometry is GeoJSONGeometryType {
+  return (
+    geometry !== null &&
+    typeof geometry === "object" &&
+    "type" in geometry &&
+    typeof geometry.type === "string" &&
+    SUPPORTED_GEOMETRY_TYPES.has(geometry.type)
+  );
+}
+
+interface GeoJSONFeature {
+  type: "Feature";
+  geometry: unknown; // Could be any GeoJSON geometry type from external sources
+  properties?: Record<string, unknown>;
+}
+
+interface ValidatedGeoJSONFeature {
+  type: "Feature";
+  geometry: GeoJSONGeometryType; // Validated to be a supported type
+  properties?: Record<string, unknown>;
+}
+
+interface GeoJSONFeatureCollection {
+  type: "FeatureCollection";
+  features: GeoJSONFeature[];
+}
 
 export class GeoFeatureExtractor implements IFeatureExtractor {
   extractFeatures(
@@ -16,6 +46,14 @@ export class GeoFeatureExtractor implements IFeatureExtractor {
       return this.extractGeocodeFeature(result, toolArguments);
     } else if (toolName.includes("calculate_distance")) {
       return this.extractDistanceFeatures(result, toolArguments);
+    } else if (toolName.includes("generate_isochrone")) {
+      return this.extractGeoJSONFeatures(result, "isochrone");
+    } else if (toolName.includes("fetch_amenities")) {
+      return this.extractGeoJSONFeatures(result, "amenity");
+    } else if (toolName.includes("fetch_transit")) {
+      return this.extractGeoJSONFeatures(result, "transit");
+    } else if (toolName.includes("fetch_pois")) {
+      return this.extractGeoJSONFeatures(result, "poi");
     } else if (toolName.includes("remove_feature")) {
       // no-op for remove_feature tool
       return [];
@@ -47,10 +85,11 @@ export class GeoFeatureExtractor implements IFeatureExtractor {
       return [
         {
           id: randomUUID(),
-          type: "marker",
-          lat,
-          lon,
-          label,
+          geometry: {
+            type: "Point",
+            coordinates: [lon, lat],
+          },
+          properties: { label },
         },
       ];
     } catch (e) {
@@ -80,10 +119,14 @@ export class GeoFeatureExtractor implements IFeatureExtractor {
 
         features.push({
           id: randomUUID(),
-          type: "marker",
-          lat: parseFloat(distanceResult.start_lat),
-          lon: parseFloat(distanceResult.start_lon),
-          label: startLocation || "Start",
+          geometry: {
+            type: "Point",
+            coordinates: [
+              parseFloat(distanceResult.start_lon),
+              parseFloat(distanceResult.start_lat),
+            ],
+          },
+          properties: { label: startLocation || "Start" },
         });
       }
 
@@ -100,10 +143,14 @@ export class GeoFeatureExtractor implements IFeatureExtractor {
 
         features.push({
           id: randomUUID(),
-          type: "marker",
-          lat: parseFloat(distanceResult.end_lat),
-          lon: parseFloat(distanceResult.end_lon),
-          label: endLocation || "End",
+          geometry: {
+            type: "Point",
+            coordinates: [
+              parseFloat(distanceResult.end_lon),
+              parseFloat(distanceResult.end_lat),
+            ],
+          },
+          properties: { label: endLocation || "End" },
         });
       }
 
@@ -112,5 +159,122 @@ export class GeoFeatureExtractor implements IFeatureExtractor {
       console.error("Failed to extract distance features:", e);
       return [];
     }
+  }
+
+  private extractGeoJSONFeatures(
+    result: string,
+    featureCategory: string
+  ): GeoFeature[] {
+    try {
+      const parsed = JSON.parse(result);
+
+      // Handle GeoJSON FeatureCollection
+      if (parsed.type === "FeatureCollection" && Array.isArray(parsed.features)) {
+        const featureCollection = parsed as GeoJSONFeatureCollection;
+        const { supported, skipped } = this.partitionByGeometrySupport(featureCollection.features);
+
+        if (skipped.length > 0) {
+          console.error(`Skipping ${skipped.length} feature(s) with unsupported geometry: ${skipped.join(", ")}`);
+        }
+
+        return supported.map((feature) => this.convertGeoJSONFeature(feature, featureCategory));
+      }
+
+      // Handle single GeoJSON Feature
+      if (parsed.type === "Feature" && parsed.geometry) {
+        if (!isSupportedGeometry(parsed.geometry)) {
+          const geometryType = (parsed.geometry as { type?: string })?.type ?? "unknown";
+          console.error(`Skipping feature with unsupported geometry: ${geometryType}`);
+          return [];
+        }
+        const validatedFeature: ValidatedGeoJSONFeature = {
+          type: "Feature",
+          geometry: parsed.geometry,
+          properties: parsed.properties,
+        };
+        return [this.convertGeoJSONFeature(validatedFeature, featureCategory)];
+      }
+
+      console.error(`Unexpected GeoJSON format: ${parsed.type}`);
+      return [];
+    } catch (e) {
+      console.error(`Failed to extract ${featureCategory} features:`, e);
+      return [];
+    }
+  }
+
+  private partitionByGeometrySupport(features: GeoJSONFeature[]): {
+    supported: ValidatedGeoJSONFeature[];
+    skipped: string[];
+  } {
+    const supported: ValidatedGeoJSONFeature[] = [];
+    const skipped: string[] = [];
+
+    for (const feature of features) {
+      if (isSupportedGeometry(feature.geometry)) {
+        supported.push({ ...feature, geometry: feature.geometry });
+      } else {
+        const geometryType = (feature.geometry as { type?: string })?.type ?? "unknown";
+        skipped.push(geometryType);
+      }
+    }
+
+    return { supported, skipped };
+  }
+
+  private convertGeoJSONFeature(
+    feature: ValidatedGeoJSONFeature,
+    featureCategory: string
+  ): GeoFeature {
+    const props = feature.properties || {};
+
+    // Build a label from available properties
+    const label = this.buildLabel(props, featureCategory);
+
+    return {
+      id: randomUUID(),
+      geometry: feature.geometry,
+      properties: {
+        ...props,
+        label,
+        featureCategory,
+      },
+    };
+  }
+
+  private buildLabel(
+    props: Record<string, unknown>,
+    featureCategory: string
+  ): string {
+    // Try common name fields first
+    if (typeof props.name === "string" && props.name !== "Unnamed") {
+      return props.name;
+    }
+
+    // For isochrones, build a descriptive label
+    if (featureCategory === "isochrone" && typeof props.time_minutes === "number") {
+      return `${props.time_minutes} min walk`;
+    }
+
+    // For transit, include type
+    if (featureCategory === "transit" && typeof props.transit_type === "string") {
+      const name = typeof props.name === "string" ? props.name : "";
+      return name ? `${name} (${props.transit_type})` : props.transit_type;
+    }
+
+    // For amenities, include type
+    if (featureCategory === "amenity" && typeof props.amenity_type === "string") {
+      const name = typeof props.name === "string" ? props.name : "";
+      return name ? `${name} (${props.amenity_type})` : props.amenity_type;
+    }
+
+    // For POIs, include type
+    if (featureCategory === "poi" && typeof props.poi_type === "string") {
+      const name = typeof props.name === "string" ? props.name : "";
+      return name ? `${name} (${props.poi_type})` : props.poi_type;
+    }
+
+    // Fallback
+    return typeof props.name === "string" ? props.name : featureCategory;
   }
 }

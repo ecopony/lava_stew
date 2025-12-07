@@ -1,11 +1,11 @@
-// ABOUTME: BLoC for managing map visualization state
-// ABOUTME: Handles adding/removing geographic features and map operations
+// ABOUTME: BLoC for managing map visualization state.
+// ABOUTME: Handles adding/removing geographic features and map operations.
 
 import 'package:bloc/bloc.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart' hide MapEvent;
 import 'package:latlong2/latlong.dart';
 
+import '../models/geo_feature.dart';
 import 'map_event.dart';
 import 'map_state.dart';
 
@@ -21,9 +21,6 @@ class MapBloc extends Bloc<MapEvent, MapState> {
   MapBloc() : super(MapState()) {
     on<AddGeoFeature>(_onAddGeoFeature);
     on<RemoveGeoFeature>(_onRemoveGeoFeature);
-    on<AddMarkers>(_onAddMarkers);
-    on<AddPolylines>(_onAddPolylines);
-    on<AddPolygons>(_onAddPolygons);
     on<ClearMap>(_onClearMap);
     on<ZoomIn>(_onZoomIn);
     on<ZoomOut>(_onZoomOut);
@@ -34,116 +31,33 @@ class MapBloc extends Bloc<MapEvent, MapState> {
   }
 
   void _onAddGeoFeature(AddGeoFeature event, Emitter<MapState> emit) {
-    final marker = Marker(
-      key: ValueKey(event.feature.id),
-      point: LatLng(event.feature.lat, event.feature.lon),
-      width: 80,
-      height: 80,
-      child: const Icon(
-        Icons.location_on,
-        color: Colors.red,
-        size: 40,
-      ),
-    );
-
-    final updatedMarkers = [...state.markers, marker];
-    final allPoints = updatedMarkers.map((m) => m.point).toList();
-    final newPoints = [marker.point];
+    final updatedFeatures = [...state.features, event.feature];
+    final allPoints = _extractPointsFromFeatures(updatedFeatures);
+    final newPoints = _extractPointsFromGeometry(event.feature.geometry);
 
     _handleAutoFrame(
       emit: emit,
-      hasNewFeatures: true,
+      updatedFeatures: updatedFeatures,
       allPoints: allPoints,
       newPoints: newPoints,
-      updateState: (conversationBounds, camera) => state.copyWith(
-        markers: updatedMarkers,
-        conversationBounds: conversationBounds,
-        center: camera?.center ?? state.center,
-        zoom: camera?.zoom ?? state.zoom,
-      ),
-      fallbackState: state.copyWith(
-        markers: updatedMarkers,
-      ),
     );
   }
 
   void _onRemoveGeoFeature(RemoveGeoFeature event, Emitter<MapState> emit) {
-    final updatedMarkers =
-        state.markers.where((m) => m.key != ValueKey(event.featureId)).toList();
+    final updatedFeatures =
+        state.features.where((f) => f.id != event.featureId).toList();
 
-    emit(state.copyWith(markers: updatedMarkers));
-  }
-
-  void _onAddMarkers(AddMarkers event, Emitter<MapState> emit) {
-    final updatedMarkers = [...state.markers, ...event.markers];
-    final allPoints = updatedMarkers.map((m) => m.point).toList();
-    final newPoints = event.markers.map((m) => m.point).toList();
-
-    _handleAutoFrame(
-      emit: emit,
-      hasNewFeatures: event.markers.isNotEmpty,
-      allPoints: allPoints,
-      newPoints: newPoints,
-      updateState: (conversationBounds, camera) => state.copyWith(
-        markers: updatedMarkers,
-        conversationBounds: conversationBounds,
-        center: camera?.center ?? state.center,
-        zoom: camera?.zoom ?? state.zoom,
-      ),
-      fallbackState: state.copyWith(markers: updatedMarkers),
-    );
-  }
-
-  void _onAddPolylines(AddPolylines event, Emitter<MapState> emit) {
-    final updatedPolylines = [...state.polylines, ...event.polylines];
-    final allPoints = updatedPolylines.expand((p) => p.points).toList();
-    final newPoints = event.polylines.expand((p) => p.points).toList();
-
-    _handleAutoFrame(
-      emit: emit,
-      hasNewFeatures: event.polylines.isNotEmpty,
-      allPoints: allPoints,
-      newPoints: newPoints,
-      updateState: (conversationBounds, camera) => state.copyWith(
-        polylines: updatedPolylines,
-        conversationBounds: conversationBounds,
-        center: camera?.center ?? state.center,
-        zoom: camera?.zoom ?? state.zoom,
-      ),
-      fallbackState: state.copyWith(polylines: updatedPolylines),
-    );
-  }
-
-  void _onAddPolygons(AddPolygons event, Emitter<MapState> emit) {
-    final updatedPolygons = [...state.polygons, ...event.polygons];
-    final allPoints = updatedPolygons.expand((p) => p.points).toList();
-    final newPoints = event.polygons.expand((p) => p.points).toList();
-
-    _handleAutoFrame(
-      emit: emit,
-      hasNewFeatures: event.polygons.isNotEmpty,
-      allPoints: allPoints,
-      newPoints: newPoints,
-      updateState: (conversationBounds, camera) => state.copyWith(
-        polygons: updatedPolygons,
-        conversationBounds: conversationBounds,
-        center: camera?.center ?? state.center,
-        zoom: camera?.zoom ?? state.zoom,
-      ),
-      fallbackState: state.copyWith(polygons: updatedPolygons),
-    );
+    emit(state.copyWith(features: updatedFeatures));
   }
 
   void _handleAutoFrame({
     required Emitter<MapState> emit,
-    required bool hasNewFeatures,
+    required List<GeoFeature> updatedFeatures,
     required List<LatLng> allPoints,
     required List<LatLng> newPoints,
-    required MapState Function(LatLngBounds?, MapCamera?) updateState,
-    required MapState fallbackState,
   }) {
-    if (!state.autoFrameEnabled || !hasNewFeatures) {
-      emit(fallbackState);
+    if (!state.autoFrameEnabled || newPoints.isEmpty) {
+      emit(state.copyWith(features: updatedFeatures));
       return;
     }
 
@@ -151,7 +65,7 @@ class MapBloc extends Bloc<MapEvent, MapState> {
     final newBounds = _calculateBoundsFromPoints(newPoints);
 
     if (allBounds == null || newBounds == null) {
-      emit(fallbackState);
+      emit(state.copyWith(features: updatedFeatures));
       return;
     }
 
@@ -163,7 +77,12 @@ class MapBloc extends Bloc<MapEvent, MapState> {
       camera = _fitBounds(allBounds);
     }
 
-    emit(updateState(allBounds, camera));
+    emit(state.copyWith(
+      features: updatedFeatures,
+      conversationBounds: allBounds,
+      center: camera?.center ?? state.center,
+      zoom: camera?.zoom ?? state.zoom,
+    ));
   }
 
   void _onClearMap(ClearMap event, Emitter<MapState> emit) {
@@ -212,12 +131,31 @@ class MapBloc extends Bloc<MapEvent, MapState> {
     ));
   }
 
-  List<LatLng> _getAllPointsFromState() {
-    return [
-      ...state.markers.map((m) => m.point),
-      ...state.polylines.expand((p) => p.points),
-      ...state.polygons.expand((p) => p.points),
-    ].toList();
+  List<LatLng> _extractPointsFromFeatures(List<GeoFeature> features) {
+    final points = <LatLng>[];
+    for (final feature in features) {
+      points.addAll(_extractPointsFromGeometry(feature.geometry));
+    }
+    return points;
+  }
+
+  List<LatLng> _extractPointsFromGeometry(GeoJSONGeometry geometry) {
+    switch (geometry) {
+      case GeoJSONPoint():
+        return [LatLng(geometry.latitude, geometry.longitude)];
+
+      case GeoJSONLineString():
+        return geometry.coordinates
+            .map((coord) => LatLng(coord[1], coord[0]))
+            .toList();
+
+      case GeoJSONPolygon():
+        // Use exterior ring (first array) for bounds calculation
+        if (geometry.coordinates.isEmpty) return [];
+        return geometry.coordinates[0]
+            .map((coord) => LatLng(coord[1], coord[0]))
+            .toList();
+    }
   }
 
   LatLngBounds? _calculateBoundsFromPoints(List<LatLng> points) {
@@ -332,7 +270,7 @@ class MapBloc extends Bloc<MapEvent, MapState> {
 
   void _onEnableAutoFrame(EnableAutoFrame event, Emitter<MapState> emit) {
     // Recalculate bounds from all current features
-    final allPoints = _getAllPointsFromState();
+    final allPoints = _extractPointsFromFeatures(state.features);
     final conversationBounds = _calculateBoundsFromPoints(allPoints);
     MapCamera? camera;
     if (conversationBounds != null) {

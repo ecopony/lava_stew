@@ -5,11 +5,11 @@ import { Bloc } from "@granite-crisp/react-bloc";
 import type { MapEvent } from "./map_event";
 import {
   type MapState,
-  type MapMarker,
   type LatLng,
   type LatLngBounds,
   createInitialMapState,
 } from "./map_state";
+import type { GeoFeature, GeoJSONGeometry } from "../../models";
 
 // Auto-frame thresholds
 const SINGLE_POINT_THRESHOLD = 0.0001; // ~11 meters at equator
@@ -64,37 +64,26 @@ export class MapBloc extends Bloc<MapEvent, MapState> {
     }
   }
 
-  private handleAddGeoFeature(feature: {
-    id: string;
-    lat: number;
-    lon: number;
-    label?: string;
-  }): void {
-    const marker: MapMarker = {
-      id: feature.id,
-      position: { lat: feature.lat, lng: feature.lon },
-      label: feature.label,
-    };
+  private handleAddGeoFeature(feature: GeoFeature): void {
+    const updatedFeatures = [...this.state.features, feature];
+    const allPoints = this.extractPointsFromFeatures(updatedFeatures);
+    const newPoints = this.extractPointsFromGeometry(feature.geometry);
 
-    const updatedMarkers = [...this.state.markers, marker];
-    const allPoints = updatedMarkers.map((m) => m.position);
-    const newPoints = [marker.position];
-
-    this.handleAutoFrame(updatedMarkers, allPoints, newPoints);
+    this.handleAutoFrame(updatedFeatures, allPoints, newPoints);
   }
 
   private handleRemoveGeoFeature(featureId: string): void {
-    const updatedMarkers = this.state.markers.filter((m) => m.id !== featureId);
-    this.emit({ markers: updatedMarkers });
+    const updatedFeatures = this.state.features.filter((f) => f.id !== featureId);
+    this.emit({ features: updatedFeatures });
   }
 
   private handleAutoFrame(
-    updatedMarkers: MapMarker[],
+    updatedFeatures: GeoFeature[],
     allPoints: LatLng[],
     newPoints: LatLng[]
   ): void {
     if (!this.state.autoFrameEnabled || newPoints.length === 0) {
-      this.emit({ markers: updatedMarkers });
+      this.emit({ features: updatedFeatures });
       return;
     }
 
@@ -102,7 +91,7 @@ export class MapBloc extends Bloc<MapEvent, MapState> {
     const newBounds = this.calculateBoundsFromPoints(newPoints);
 
     if (!allBounds || !newBounds) {
-      this.emit({ markers: updatedMarkers });
+      this.emit({ features: updatedFeatures });
       return;
     }
 
@@ -119,21 +108,21 @@ export class MapBloc extends Bloc<MapEvent, MapState> {
       };
 
       this.emit({
-        markers: updatedMarkers,
+        features: updatedFeatures,
         conversationBounds: allBounds,
         center,
         fitBoundsVersion: this.state.fitBoundsVersion + 1,
       });
     } else {
       this.emit({
-        markers: updatedMarkers,
+        features: updatedFeatures,
         conversationBounds: allBounds,
       });
     }
   }
 
   private handleEnableAutoFrame(): void {
-    const allPoints = this.state.markers.map((m) => m.position);
+    const allPoints = this.extractPointsFromFeatures(this.state.features);
     const conversationBounds = this.calculateBoundsFromPoints(allPoints);
 
     if (conversationBounds) {
@@ -151,6 +140,37 @@ export class MapBloc extends Bloc<MapEvent, MapState> {
       });
     } else {
       this.emit({ autoFrameEnabled: true });
+    }
+  }
+
+  private extractPointsFromFeatures(features: GeoFeature[]): LatLng[] {
+    const points: LatLng[] = [];
+    for (const feature of features) {
+      points.push(...this.extractPointsFromGeometry(feature.geometry));
+    }
+    return points;
+  }
+
+  private extractPointsFromGeometry(geometry: GeoJSONGeometry): LatLng[] {
+    switch (geometry.type) {
+      case "Point":
+        return [{ lat: geometry.coordinates[1], lng: geometry.coordinates[0] }];
+
+      case "LineString":
+        return geometry.coordinates.map((coord) => ({
+          lat: coord[1],
+          lng: coord[0],
+        }));
+
+      case "Polygon":
+        // Use exterior ring (first array) for bounds calculation
+        return geometry.coordinates[0].map((coord) => ({
+          lat: coord[1],
+          lng: coord[0],
+        }));
+
+      default:
+        return [];
     }
   }
 

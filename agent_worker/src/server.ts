@@ -377,7 +377,7 @@ async function saveFeaturesAsync(
       for (const feature of features) {
         await createGeoFeature(messageId, feature);
         console.log(
-          `[WORKER] Saved geo feature for message ${messageId}: ${feature.label}`
+          `[WORKER] Saved geo feature for message ${messageId}: ${feature.properties.label ?? feature.id}`
         );
       }
     } catch (error) {
