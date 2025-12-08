@@ -124,7 +124,7 @@ pnpm install
 pnpm dev
 ```
 
-Open http://localhost:5173 in your browser. The React client uses the BLoC pattern for state management — see `react_client/README.md` for details.
+Open http://localhost:5173 in your browser. The React client uses MapLibre GL JS with deck.gl for GPU-accelerated map rendering, and the BLoC pattern for state management — see `react_client/README.md` for details.
 
 ### Option 2: Flutter Client (Desktop/Mobile)
 
@@ -139,7 +139,8 @@ Select your target platform when prompted. The Flutter client also uses BLoC via
 Both clients provide:
 - Two-pane layout (chat + map)
 - SSE streaming for real-time responses
-- Map visualization of geocoded locations
+- Map visualization of geocoded locations and isochrones
+- Markdown rendering in chat responses (including tables)
 
 ### Check Agent Worker Logs
 

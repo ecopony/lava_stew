@@ -71,7 +71,9 @@ export class ApiClient {
               yield {
                 type: "error" as const,
                 errorType: "parse_error",
-                message: `Failed to parse event: ${e instanceof Error ? e.message : String(e)}`,
+                message: `Failed to parse event: ${
+                  e instanceof Error ? e.message : String(e)
+                }`,
               };
             }
             data = null;
@@ -88,7 +90,9 @@ export class ApiClient {
           yield {
             type: "error" as const,
             errorType: "parse_error",
-            message: `Failed to parse event: ${e instanceof Error ? e.message : String(e)}`,
+            message: `Failed to parse event: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
           };
         }
       }

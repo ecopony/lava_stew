@@ -3,12 +3,7 @@
 
 import { MultiBlocProvider } from "@granite-crisp/react-bloc";
 import { ChatPane, MapPane } from "./components";
-import {
-  ChatBloc,
-  ChatBlocProvider,
-  MapBloc,
-  MapBlocProvider,
-} from "./blocs";
+import { ChatBloc, ChatBlocProvider, MapBloc, MapBlocProvider } from "./blocs";
 import { apiClient } from "./services/api_client";
 
 // Create blocs at module level (singleton pattern)

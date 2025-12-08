@@ -32,10 +32,10 @@ export function ChatPane() {
     state.status === "assistantThinking"
       ? "Assistant is thinking..."
       : state.status === "toolExecuting" && state.currentToolCall
-        ? `Using ${state.currentToolCall}...`
-        : state.status === "subagentExecuting" && state.currentSubagent
-          ? `Sub-agent working: ${state.currentSubagent}...`
-          : null;
+      ? `Using ${state.currentToolCall}...`
+      : state.status === "subagentExecuting" && state.currentSubagent
+      ? `Sub-agent working: ${state.currentSubagent}...`
+      : null;
 
   return (
     <div className="flex flex-col h-full bg-base2">

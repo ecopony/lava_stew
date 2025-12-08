@@ -1,6 +1,8 @@
 // ABOUTME: Type definitions for geographic features and database models
 // ABOUTME: Defines GeoFeature structure used throughout the worker
 
+import type { Point, LineString, Polygon } from "geojson";
+
 // The Agent SDK re-exports the Anthropic SDK's BetaUsage as Usage
 // We can't import it directly, so we'll redefine based on the SDK's structure
 type SdkUsage = {
@@ -10,22 +12,8 @@ type SdkUsage = {
   cache_read_input_tokens?: number | null;
 };
 
-export interface GeoJSONPoint {
-  type: 'Point';
-  coordinates: [number, number]; // [lon, lat]
-}
-
-export interface GeoJSONLineString {
-  type: 'LineString';
-  coordinates: Array<[number, number]>;
-}
-
-export interface GeoJSONPolygon {
-  type: 'Polygon';
-  coordinates: Array<Array<[number, number]>>;
-}
-
-export type GeoJSONGeometryType = GeoJSONPoint | GeoJSONLineString | GeoJSONPolygon;
+// Geometry types we support for rendering and persistence
+export type GeoJSONGeometryType = Point | LineString | Polygon;
 
 export interface GeoFeature {
   id: string;
@@ -35,7 +23,6 @@ export interface GeoFeature {
     [key: string]: unknown;
   };
 }
-
 
 export interface StoredGeoFeature {
   id: string;
