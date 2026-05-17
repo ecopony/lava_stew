@@ -12,6 +12,13 @@ import fetch_transit_osm
 
 class TestFetchTransitOSM(unittest.TestCase):
 
+    def setUp(self):
+        self.sleep_patcher = patch('overpass_client.time.sleep')
+        self.sleep_patcher.start()
+
+    def tearDown(self):
+        self.sleep_patcher.stop()
+
     def test_missing_arguments(self):
         """Should exit with error when arguments are missing"""
         with patch('sys.argv', ['fetch_transit_osm.py']):
@@ -23,7 +30,7 @@ class TestFetchTransitOSM(unittest.TestCase):
                 error_output = json.loads(mock_stderr.getvalue())
                 self.assertIn("error", error_output)
 
-    @patch('fetch_transit_osm.requests.post')
+    @patch('overpass_client.requests.post')
     def test_successful_transit_fetch(self, mock_post):
         """Should return GeoJSON with transit stops"""
         mock_response = Mock()
@@ -81,7 +88,7 @@ class TestFetchTransitOSM(unittest.TestCase):
                 station = output["features"][1]
                 self.assertEqual(station["properties"]["transit_type"], "station")
 
-    @patch('fetch_transit_osm.requests.post')
+    @patch('overpass_client.requests.post')
     def test_empty_results(self, mock_post):
         """Should return empty FeatureCollection when no transit found"""
         mock_response = Mock()
