@@ -12,6 +12,13 @@ import fetch_amenities_osm
 
 class TestFetchAmenitiesOSM(unittest.TestCase):
 
+    def setUp(self):
+        self.sleep_patcher = patch('overpass_client.time.sleep')
+        self.sleep_patcher.start()
+
+    def tearDown(self):
+        self.sleep_patcher.stop()
+
     def test_missing_arguments(self):
         """Should exit with error when arguments are missing"""
         with patch('sys.argv', ['fetch_amenities_osm.py']):
@@ -23,7 +30,7 @@ class TestFetchAmenitiesOSM(unittest.TestCase):
                 error_output = json.loads(mock_stderr.getvalue())
                 self.assertIn("error", error_output)
 
-    @patch('fetch_amenities_osm.requests.post')
+    @patch('overpass_client.requests.post')
     def test_successful_amenities_fetch(self, mock_post):
         """Should return GeoJSON with parks and attractions"""
         mock_response = Mock()
@@ -79,7 +86,7 @@ class TestFetchAmenitiesOSM(unittest.TestCase):
                 attraction = output["features"][1]
                 self.assertEqual(attraction["properties"]["amenity_type"], "attraction")
 
-    @patch('fetch_amenities_osm.requests.post')
+    @patch('overpass_client.requests.post')
     def test_polygon_features(self, mock_post):
         """Should handle polygon features with center points"""
         mock_response = Mock()

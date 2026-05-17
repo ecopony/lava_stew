@@ -14,6 +14,13 @@ import fetch_pois_osm
 
 class TestFetchPOIsOSM(unittest.TestCase):
 
+    def setUp(self):
+        self.sleep_patcher = patch('overpass_client.time.sleep')
+        self.sleep_patcher.start()
+
+    def tearDown(self):
+        self.sleep_patcher.stop()
+
     def test_missing_arguments(self):
         """Should exit with error when arguments are missing"""
         with patch('sys.argv', ['fetch_pois_osm.py']):
@@ -37,7 +44,7 @@ class TestFetchPOIsOSM(unittest.TestCase):
                 error_output = json.loads(mock_stderr.getvalue())
                 self.assertIn("error", error_output)
 
-    @patch('fetch_pois_osm.requests.post')
+    @patch('overpass_client.requests.post')
     def test_successful_poi_fetch(self, mock_post):
         """Should return GeoJSON when Overpass API succeeds"""
         # Mock Overpass API response
@@ -87,7 +94,7 @@ class TestFetchPOIsOSM(unittest.TestCase):
                 self.assertEqual(feature["properties"]["name"], "Pike Place Chowder")
                 self.assertEqual(feature["properties"]["category"], "restaurant")
 
-    @patch('fetch_pois_osm.requests.post')
+    @patch('overpass_client.requests.post')
     def test_overpass_api_failure(self, mock_post):
         """Should return error when Overpass API fails"""
         mock_response = Mock()
@@ -111,7 +118,7 @@ class TestFetchPOIsOSM(unittest.TestCase):
                 error_output = json.loads(mock_stderr.getvalue())
                 self.assertIn("error", error_output)
 
-    @patch('fetch_pois_osm.requests.post')
+    @patch('overpass_client.requests.post')
     def test_empty_results(self, mock_post):
         """Should return empty FeatureCollection when no POIs found"""
         mock_response = Mock()
