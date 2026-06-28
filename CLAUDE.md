@@ -179,7 +179,7 @@ RABBITMQ_URL=amqp://lava:stew@localhost:5672
 - Always address Ed by name
 - Stop and ask for clarification rather than making assumptions
 - Push back on bad ideas with technical reasons
-- Use TodoWrite to track all work
+- Use the task tools (TaskCreate/TaskUpdate) to track all work
 
 ### Code Quality
 
@@ -337,8 +337,8 @@ actual purpose.
 
 ## Issue tracking
 
-- You MUST use your TodoWrite tool to keep track of what you're doing
-- You MUST NEVER discard tasks from your TodoWrite todo list without Ed's explicit approval
+- You MUST use your task tools (TaskCreate/TaskUpdate) to keep track of what you're doing
+- You MUST NEVER discard tasks from your task list without Ed's explicit approval
 
 ## Systematic Debugging Process
 

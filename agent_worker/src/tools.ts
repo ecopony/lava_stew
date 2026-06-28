@@ -23,7 +23,7 @@ const geometrySchema = z.union([pointGeometrySchema, polygonGeometrySchema]);
 const featureSchema = z.object({
   type: z.literal("Feature"),
   geometry: geometrySchema,
-  properties: z.record(z.any()).optional(),
+  properties: z.record(z.string(), z.any()).optional(),
 });
 
 const featureCollectionSchema = z.object({
