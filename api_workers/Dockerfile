@@ -27,4 +27,4 @@ RUN npm run build
 # Create virtual environment directory structure (will be populated at runtime)
 RUN mkdir -p /app/agent_worker
 
-CMD ["sh", "-c", "cd /app/agent_worker && uv venv .venv && . .venv/bin/activate && uv pip install -r pyproject.toml && cd /app && npm start"]
+CMD ["sh", "-c", "cd /app/agent_worker && ([ -d .venv ] || uv venv .venv) && . .venv/bin/activate && uv pip install -r pyproject.toml && cd /app && npm start"]
