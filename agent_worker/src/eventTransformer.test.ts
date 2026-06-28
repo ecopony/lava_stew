@@ -1151,4 +1151,123 @@ describe('transformToAgentEvents', () => {
       expect(orchestratorUsageCallback).not.toHaveBeenCalled();
     });
   });
+
+  describe('Result error handling', () => {
+    it('emits a budget_exceeded error when the query stops on budget cap', async () => {
+      const sdkStream = (async function* () {
+        yield { type: 'result', subtype: 'error_max_budget_usd' };
+      })();
+
+      const events = [];
+      for await (const event of transformToAgentEvents(
+        sdkStream,
+        mockFeatureExtractor,
+        []
+      )) {
+        events.push(event);
+      }
+
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'error',
+          errorType: 'budget_exceeded',
+        })
+      );
+    });
+
+    it('emits an error for max_turns result', async () => {
+      const sdkStream = (async function* () {
+        yield { type: 'result', subtype: 'error_max_turns' };
+      })();
+
+      const events = [];
+      for await (const event of transformToAgentEvents(
+        sdkStream,
+        mockFeatureExtractor,
+        []
+      )) {
+        events.push(event);
+      }
+
+      expect(events).toContainEqual(
+        expect.objectContaining({ type: 'error', errorType: 'error_max_turns' })
+      );
+    });
+
+    it('emits no error for a successful result', async () => {
+      const sdkStream = (async function* () {
+        yield { type: 'result', subtype: 'success' };
+      })();
+
+      const events = [];
+      for await (const event of transformToAgentEvents(
+        sdkStream,
+        mockFeatureExtractor,
+        []
+      )) {
+        events.push(event);
+      }
+
+      expect(events.some((e) => e.type === 'error')).toBe(false);
+    });
+  });
+
+  describe('Subagent text forwarding', () => {
+    it('routes subagent text to subagent_text_chunk, not the main answer', async () => {
+      const sdkStream = (async function* () {
+        yield {
+          type: 'assistant',
+          parent_tool_use_id: 'task-1',
+          subagent_type: 'location-intelligence',
+          message: {
+            content: [{ type: 'text', text: 'Gathering POIs near the center' }],
+          },
+        };
+      })();
+
+      const events = [];
+      for await (const event of transformToAgentEvents(
+        sdkStream,
+        mockFeatureExtractor,
+        ['location-intelligence']
+      )) {
+        events.push(event);
+      }
+
+      expect(events).toContainEqual({
+        type: 'subagent_text_chunk',
+        toolId: 'task-1',
+        agentName: 'location-intelligence',
+        chunk: 'Gathering POIs near the center',
+      });
+      // Must not leak into the main assistant answer or fire the main thinking indicator
+      expect(events.some((e) => e.type === 'assistant_message_chunk')).toBe(false);
+      expect(events.some((e) => e.type === 'assistant_thinking')).toBe(false);
+    });
+
+    it('still routes main-agent text to assistant_message_chunk', async () => {
+      const sdkStream = (async function* () {
+        yield {
+          type: 'assistant',
+          parent_tool_use_id: null,
+          message: { content: [{ type: 'text', text: 'Here is the answer' }] },
+        };
+      })();
+
+      const events = [];
+      for await (const event of transformToAgentEvents(
+        sdkStream,
+        mockFeatureExtractor,
+        []
+      )) {
+        events.push(event);
+      }
+
+      expect(events).toContainEqual({
+        type: 'assistant_message_chunk',
+        chunk: 'Here is the answer',
+      });
+      expect(events.some((e) => e.type === 'subagent_text_chunk')).toBe(false);
+    });
+  });
 });

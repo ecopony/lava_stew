@@ -35,6 +35,26 @@ export async function ensureConversation(
   return result.rows[0];
 }
 
+export async function getSessionId(sessionKey: string): Promise<string | null> {
+  const pool = getPool();
+  const result = await pool.query(
+    "SELECT session_id FROM conversations WHERE session_key = $1",
+    [sessionKey]
+  );
+  return result.rows[0]?.session_id ?? null;
+}
+
+export async function setSessionId(
+  sessionKey: string,
+  sessionId: string
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    "UPDATE conversations SET session_id = $2, updated_at = NOW() WHERE session_key = $1",
+    [sessionKey, sessionId]
+  );
+}
+
 export async function createMessage(
   conversationId: string,
   role: "user" | "assistant",

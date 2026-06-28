@@ -22,6 +22,12 @@ export type AgentEvent =
     }
   | { type: "subagent_started"; toolId: string; agentName: string }
   | {
+      type: "subagent_text_chunk";
+      toolId: string;
+      agentName: string;
+      chunk: string;
+    }
+  | {
       type: "subagent_completed";
       toolId: string;
       agentName: string;
@@ -71,6 +77,14 @@ export function parseAgentEvent(json: Record<string, unknown>): AgentEvent {
         type: "subagent_started",
         toolId: json.toolId as string,
         agentName: json.agentName as string,
+      };
+
+    case "subagent_text_chunk":
+      return {
+        type: "subagent_text_chunk",
+        toolId: json.toolId as string,
+        agentName: json.agentName as string,
+        chunk: (json.chunk as string) ?? "",
       };
 
     case "subagent_completed":

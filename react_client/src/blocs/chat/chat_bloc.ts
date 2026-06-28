@@ -12,6 +12,7 @@ import {
   createToolCallMessage,
   createToolResultMessage,
   createSubagentCallMessage,
+  createSubagentTextMessage,
   createSubagentResultMessage,
   createGeoFeatureMessage,
 } from "../../models";
@@ -66,6 +67,10 @@ export class ChatBloc extends Bloc<ChatEvent, ChatState> {
       let currentAssistantMessageId: string | null = null;
       let assistantTextBuffer = "";
       let messageCounter = 0;
+
+      // Per-subagent streamed-text buffers, keyed by Task tool id
+      // (subagents can run in parallel, so chunks interleave)
+      const subagentTextBuffers = new Map<string, { id: string; text: string }>();
 
       for await (const event of eventStream) {
         switch (event.type) {
@@ -158,6 +163,42 @@ export class ChatBloc extends Bloc<ChatEvent, ChatState> {
               status: "subagentExecuting",
             });
             break;
+
+          case "subagent_text_chunk": {
+            let entry = subagentTextBuffers.get(event.toolId);
+            if (!entry) {
+              messageCounter++;
+              entry = {
+                id: `subagent_text_${event.toolId}_${messageCounter}`,
+                text: event.chunk,
+              };
+              subagentTextBuffers.set(event.toolId, entry);
+              messages = [
+                ...messages,
+                createSubagentTextMessage(
+                  entry.id,
+                  event.agentName,
+                  entry.text
+                ),
+              ];
+            } else {
+              entry.text += event.chunk;
+              const idx = messages.findIndex((m) => m.id === entry!.id);
+              if (idx >= 0) {
+                messages = [
+                  ...messages.slice(0, idx),
+                  createSubagentTextMessage(
+                    entry.id,
+                    event.agentName,
+                    entry.text
+                  ),
+                  ...messages.slice(idx + 1),
+                ];
+              }
+            }
+            this.emit({ messages, status: "subagentExecuting" });
+            break;
+          }
 
           case "subagent_completed":
             messages = [

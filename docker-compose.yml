@@ -18,6 +18,16 @@ services:
       retries: 5
     restart: unless-stopped
 
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: lava-stew-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4318:4318" # OTLP HTTP receiver
+    restart: unless-stopped
+
   rabbitmq:
     image: rabbitmq:3-management
     ports:
@@ -49,6 +59,14 @@ services:
       - DB_NAME=lava_stew
       - DB_USER=postgres
       - DB_PASSWORD=postgres
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_SERVICE_NAME=agent-worker
+      # Enable Claude Code subprocess span tracing (beta) so SDK spans nest
+      # under the worker's chat.request span in Jaeger.
+      - CLAUDE_CODE_ENABLE_TELEMETRY=1
+      - CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1
+      - OTEL_TRACES_EXPORTER=otlp
     env_file:
       - .env
     depends_on:
@@ -56,6 +74,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      jaeger:
+        condition: service_started
 
   overpass_worker:
     build:

@@ -1,6 +1,9 @@
 // ABOUTME: Worker process that consumes from RabbitMQ, maintains stateful SDK sessions in memory.
 // ABOUTME: Processes messages with Agent SDK and publishes streaming responses to reply queues.
 
+// Tracing must initialize before other modules are imported.
+import "./tracing.js";
+import { trace, context, propagation } from "@opentelemetry/api";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import amqp, { Channel, ChannelModel, ConsumeMessage } from "amqplib";
 import dotenv from "dotenv";
@@ -9,11 +12,19 @@ import {
   ToolResultForPersistence,
   transformToAgentEvents,
 } from "./eventTransformer.js";
+import { getPool } from "./database.js";
 import { GeoFeatureExtractor } from "./featureExtractor.js";
+import { createToolAuditHook } from "./hooks.js";
 import { createGeoTools } from "./mcpServer.js";
-import { createMessage, ensureConversation } from "./models/conversation.js";
+import {
+  createMessage,
+  ensureConversation,
+  getSessionId,
+  setSessionId,
+} from "./models/conversation.js";
 import { createGeoFeature } from "./models/geoFeature.js";
 import { calculateCost } from "./pricing.js";
+import { PostgresSessionStore } from "./sessionStore.js";
 import type { UsageMetrics } from "./types.js";
 
 dotenv.config();
@@ -45,12 +56,24 @@ console.log(
 
 const RABBITMQ_URL = process.env.RABBITMQ_URL!;
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "claude-opus-4-7";
+const CLAUDE_FALLBACK_MODEL =
+  process.env.CLAUDE_FALLBACK_MODEL || "claude-sonnet-4-6";
+const MAX_BUDGET_USD = process.env.MAX_BUDGET_USD
+  ? parseFloat(process.env.MAX_BUDGET_USD)
+  : undefined;
 
 // Queue configuration
 const REQUESTS_QUEUE = "chat.requests";
 
-// Stateful session storage - maps conversationId to SDK session_id
+// Stateful session storage - maps conversationId to SDK session_id.
+// Backed by the conversations.session_id column so it survives a worker restart.
 const sessionIds = new Map<string, string>();
+
+// Mirrors session transcripts to Postgres so a resumed session can be
+// re-materialized after a restart (the local subprocess transcript may be gone).
+const sessionStore = new PostgresSessionStore(getPool());
+
+const tracer = trace.getTracer("agent-worker");
 
 // Feature extractor for geo tools
 const featureExtractor = new GeoFeatureExtractor();
@@ -134,8 +157,23 @@ async function processRequest(
       );
     }
 
-    // Check if we have an existing session for this conversation
-    const existingSessionId = sessionIds.get(conversationId);
+    // Check if we have an existing session for this conversation.
+    // Fall back to the persisted session id so resume survives a worker restart.
+    let existingSessionId = sessionIds.get(conversationId);
+    if (!existingSessionId) {
+      try {
+        const persistedSessionId = await getSessionId(conversationId);
+        if (persistedSessionId) {
+          existingSessionId = persistedSessionId;
+          sessionIds.set(conversationId, persistedSessionId);
+        }
+      } catch (lookupError) {
+        console.error(
+          `[WORKER] Failed to load persisted session for ${conversationId}:`,
+          lookupError
+        );
+      }
+    }
 
     if (existingSessionId) {
       console.log(
@@ -172,10 +210,25 @@ async function processRequest(
     geocode tool directly - that is enough to get it mapped.
     `;
 
+    // Propagate the active trace context into the SDK subprocess so its
+    // interaction span nests under this request's chat.request span. The SDK
+    // reads TRACEPARENT/TRACESTATE from its environment at span start. Passing
+    // options.env replaces the subprocess environment, so process.env is
+    // spread in to preserve the credentials and telemetry config it inherits.
+    const subprocessEnv: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined) subprocessEnv[key] = value;
+    }
+    const traceCarrier: Record<string, string> = {};
+    propagation.inject(context.active(), traceCarrier);
+    if (traceCarrier.traceparent) subprocessEnv.TRACEPARENT = traceCarrier.traceparent;
+    if (traceCarrier.tracestate) subprocessEnv.TRACESTATE = traceCarrier.tracestate;
+
     // Query the Claude Agent SDK
     const response = query({
       prompt: message,
       options: {
+        env: subprocessEnv,
         model: CLAUDE_MODEL,
         mcpServers: {
           "geo-tools": geoTools,
@@ -192,6 +245,13 @@ async function processRequest(
         ],
         agents: agentDefinitions,
         systemPrompt: systemPrompt,
+        fallbackModel: CLAUDE_FALLBACK_MODEL,
+        maxBudgetUsd: MAX_BUDGET_USD,
+        forwardSubagentText: true,
+        hooks: {
+          PreToolUse: [{ hooks: [createToolAuditHook(conversationId)] }],
+        },
+        sessionStore,
         // Resume existing session if we have one
         resume: existingSessionId,
       },
@@ -204,6 +264,23 @@ async function processRequest(
           sessionIds.set(conversationId, sdkMessage.session_id);
           console.log(
             `[WORKER] Storing session ID ${sdkMessage.session_id} for conversation ${conversationId}`
+          );
+          // Persist so resume survives a worker restart
+          setSessionId(conversationId, sdkMessage.session_id).catch((err) => {
+            console.error(
+              `[WORKER] Failed to persist session ID for ${conversationId}:`,
+              err
+            );
+          });
+        }
+
+        // Surface transcript-mirror failures so we are not silent on data loss
+        if (
+          sdkMessage.type === "system" &&
+          sdkMessage.subtype === "mirror_error"
+        ) {
+          console.error(
+            `[WORKER] Session transcript mirror failed for ${conversationId}: ${sdkMessage.error}`
           );
         }
 
@@ -392,8 +469,16 @@ async function main() {
         `[WORKER] Received request for conversation: ${conversationId}`
       );
 
-      // Process the request
-      await processRequest(channel, replyTo, conversationId, message);
+      // Process the request inside a span so the SDK subprocess's spans nest
+      // under this request's trace (SDK forwards the active trace context).
+      await tracer.startActiveSpan("chat.request", async (span) => {
+        span.setAttribute("conversation.id", conversationId);
+        try {
+          await processRequest(channel, replyTo, conversationId, message);
+        } finally {
+          span.end();
+        }
+      });
 
       // Acknowledge the message
       channel.ack(msg);

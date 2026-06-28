@@ -161,6 +161,17 @@ function MessageContentRenderer({ content }: { content: MessageContent }) {
         </div>
       );
 
+    case "subagentText":
+      return (
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-violet">🧠</span>
+            <span className="font-bold text-violet">{content.agentName}</span>
+          </div>
+          <p className="text-base00 whitespace-pre-wrap">{content.text}</p>
+        </div>
+      );
+
     case "subagentResult":
       return (
         <div className="flex items-center gap-2">

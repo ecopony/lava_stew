@@ -9,6 +9,7 @@ export type MessageKind =
   | "toolCall"
   | "toolResult"
   | "subagentCall"
+  | "subagentText"
   | "subagentResult"
   | "geoFeature"
   | "error";
@@ -23,6 +24,7 @@ export type MessageContent =
       error?: string;
     }
   | { type: "subagentCall"; agentName: string }
+  | { type: "subagentText"; agentName: string; text: string }
   | { type: "subagentResult"; agentName: string; error?: string }
   | { type: "geoFeature"; feature: GeoFeature };
 
@@ -81,6 +83,19 @@ export function createSubagentCallMessage(
     id,
     kind: "subagentCall",
     content: { type: "subagentCall", agentName },
+    timestamp: new Date(),
+  };
+}
+
+export function createSubagentTextMessage(
+  id: string,
+  agentName: string,
+  text: string
+): Message {
+  return {
+    id,
+    kind: "subagentText",
+    content: { type: "subagentText", agentName, text },
     timestamp: new Date(),
   };
 }

@@ -42,6 +42,7 @@ interface SdkErrorEvent {
 
 interface SdkResultEvent {
   type: "result";
+  subtype?: string;
   session_id?: string;
   usage?: UsageMetrics;
 }
@@ -147,8 +148,13 @@ export async function* transformToAgentEvents(
         continue;
       }
 
-      // Emit thinking indicator on first assistant message
-      if (!assistantMessageStarted) {
+      // Messages from a sub-agent carry parent_tool_use_id (the Task tool call).
+      // Their text is forwarded only when forwardSubagentText is enabled.
+      const parentToolUseId: string | null = sdkEvent.parent_tool_use_id ?? null;
+      const isSubagentMessage = parentToolUseId !== null;
+
+      // Emit thinking indicator on first main-agent assistant message
+      if (!isSubagentMessage && !assistantMessageStarted) {
         yield { type: "assistant_thinking" };
         assistantMessageStarted = true;
       }
@@ -158,12 +164,24 @@ export async function* transformToAgentEvents(
       // Process each content block
       for (const block of content) {
         if (block.type === "text") {
-          hasTextContent = true;
-          // Emit text as a single chunk (query doesn't stream)
-          yield {
-            type: "assistant_message_chunk",
-            chunk: block.text,
-          };
+          if (isSubagentMessage) {
+            // Attribute streamed text to the sub-agent instead of the main answer
+            yield {
+              type: "subagent_text_chunk",
+              toolId: parentToolUseId,
+              agentName:
+                sdkEvent.subagent_type ||
+                activeSubagents.get(parentToolUseId!),
+              chunk: block.text,
+            };
+          } else {
+            hasTextContent = true;
+            // Emit text as a single chunk (query doesn't stream)
+            yield {
+              type: "assistant_message_chunk",
+              chunk: block.text,
+            };
+          }
         } else if (block.type === "tool_use") {
           const toolBlock: ToolUseBlock = {
             id: block.id,
@@ -422,6 +440,30 @@ export async function* transformToAgentEvents(
         errorType: "api_error",
         message: sdkEvent.error?.message || "Unknown error occurred",
       };
+      continue;
+    }
+
+    // A result message with an error subtype means the query stopped early
+    // (budget cap, turn cap, execution error). Surface it to the client.
+    if (eventType === "result") {
+      const subtype: string | undefined = sdkEvent.subtype;
+      if (subtype && subtype.startsWith("error")) {
+        const messages: Record<string, string> = {
+          error_max_budget_usd:
+            "Stopped: the per-request cost budget was reached.",
+          error_max_turns: "Stopped: the maximum number of turns was reached.",
+          error_during_execution:
+            "The agent encountered an error during execution.",
+          error_max_structured_output_retries:
+            "The agent could not produce valid structured output.",
+        };
+        yield {
+          type: "error",
+          errorType:
+            subtype === "error_max_budget_usd" ? "budget_exceeded" : subtype,
+          message: messages[subtype] || "The agent stopped with an error.",
+        };
+      }
       continue;
     }
   }
